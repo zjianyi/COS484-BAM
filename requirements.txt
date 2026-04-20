@@ -1,14 +1,15 @@
 # Python dependencies for the Falcon Mamba [CACHE] LoRA SFT experiments on a Lambda H100.
-# Install order matters a little: install torch first (matching CUDA), then the rest.
 #
-#   pip install torch==2.4.1 --index-url https://download.pytorch.org/whl/cu121
+# Install with:
+#   pip install torch==2.7.0+cu128 --index-url https://download.pytorch.org/whl/cu128
 #   pip install -r requirements.txt
 #
-# mamba-ssm and causal-conv1d ship CUDA kernels and need a working nvcc + matching torch.
-# On a fresh Lambda H100 image they install fine via pip.
+# Pinning torch==2.7.0+cu128 ensures pip's build isolation pulls the right wheel
+# when compiling mamba-ssm and causal-conv1d CUDA extensions.
 
-torch==2.4.1
-transformers>=4.45.0,<4.50.0
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch==2.7.0+cu128
+transformers>=5.0.0
 peft>=0.13.0
 accelerate>=1.0.0
 datasets>=3.0.0
