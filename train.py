@@ -39,7 +39,7 @@ MODEL_NAME       = "tiiuae/falcon-mamba-7b-instruct"
 DATA_PATH        = "SFT_OpenMath_data/annotated/qwen3_235b/annotated_samples.jsonl"
 ADAPTER_OUT_DIR  = "adapter"
 
-NUM_EXAMPLES     = 2000
+NUM_EXAMPLES     = 1000
 NUM_EPOCHS       = 3
 LEARNING_RATE    = 5e-4
 WARMUP_RATIO     = 0.05
@@ -54,7 +54,7 @@ BATCH_SIZE       = 1
 GRAD_ACCUM       = 8
 MAX_SEQ_LEN      = 2048
 
-TIME_BUDGET_SEC  = 20 * 60      # hard wall-clock cap on trainer.train()
+TIME_BUDGET_SEC  = 50 * 60      # hard wall-clock cap on trainer.train()
 SEED             = 42
 
 # ---------------------------------------------------------------------------
