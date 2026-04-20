@@ -40,7 +40,7 @@ DATA_PATH        = "SFT_OpenMath_data/annotated/qwen3_235b/annotated_samples.jso
 ADAPTER_OUT_DIR  = "adapter"
 
 NUM_EXAMPLES     = 500          # 1/10 of 5000
-NUM_EPOCHS       = 3
+NUM_EPOCHS       = 5
 LEARNING_RATE    = 5e-4
 WARMUP_RATIO     = 0.05
 WEIGHT_DECAY     = 0.01
@@ -119,7 +119,6 @@ def build_dataset(tokenizer, rows: list[dict]) -> Dataset:
         )
         full_ids = tokenizer.encode(full_text, add_special_tokens=False)
         prompt_ids = tokenizer.encode(prompt_text, add_special_tokens=False)
-        full_ids = full_ids[:MAX_SEQ_LEN]
         prompt_len = min(len(prompt_ids), len(full_ids))
 
         labels = list(full_ids)
