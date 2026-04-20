@@ -8,3 +8,4 @@ a27c785	0.833333	0.000000	8.200000	23.8	drop	2000ex 3ep lr=5e-4 no-trunc budget�
 848f798	0.939891	0.100000	3.400000	24.1	keep	1000ex 3ep lr=5e-4 no-trunc budget=50min (~2.8ep) tied best MAE↓ acc↑
 22b0162	0.968085	0.000000	3.000000	24.5	keep	rank=32 alpha=64 1000ex 3ep lr=5e-4 50min all3ep completed NEW BEST
 013d079	0.968400	0.000000	4.200000	25.4	keep	rank=64 alpha=128 1000ex 3ep lr=5e-4 50min tied rank=32 no gain
+9ac6844	0.802500	0.000000	3.500000	24.5	drop	rank=32 alpha=64 lr=3e-4 1000ex 3ep 50min much worse than lr=5e-4
