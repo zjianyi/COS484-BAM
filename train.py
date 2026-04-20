@@ -40,7 +40,7 @@ DATA_PATH        = "SFT_OpenMath_data/annotated/qwen3_235b/annotated_samples.jso
 ADAPTER_OUT_DIR  = "adapter"
 
 NUM_EXAMPLES     = 500          # 1/10 of 5000
-NUM_EPOCHS       = 2
+NUM_EPOCHS       = 3
 LEARNING_RATE    = 5e-4
 WARMUP_RATIO     = 0.05
 WEIGHT_DECAY     = 0.01
