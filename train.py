@@ -41,12 +41,12 @@ ADAPTER_OUT_DIR  = "adapter"
 
 NUM_EXAMPLES     = 1000
 NUM_EPOCHS       = 3
-LEARNING_RATE    = 5e-4
+LEARNING_RATE    = 3e-4
 WARMUP_RATIO     = 0.05
 WEIGHT_DECAY     = 0.01
 
-LORA_RANK        = 64
-LORA_ALPHA       = 128
+LORA_RANK        = 32
+LORA_ALPHA       = 64
 LORA_DROPOUT     = 0.05
 LORA_TARGETS     = ["x_proj", "in_proj"]   # safe Mamba targets
 
