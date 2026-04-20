@@ -267,16 +267,20 @@ def main() -> None:
     torch.cuda.empty_cache()
 
     print("Running evaluate.py", flush=True)
-    proc = subprocess.run(
-        [sys.executable, "evaluate.py"],
-        capture_output=True,
+    proc = subprocess.Popen(
+        [sys.executable, "-u", "evaluate.py"],
+        stdout=subprocess.PIPE,
+        stderr=None,  # inherit stderr so it streams to run.log in real time
         text=True,
+        bufsize=1,
     )
-    eval_stdout = proc.stdout
-    eval_stderr = proc.stderr
-    sys.stdout.write(eval_stdout)
-    if eval_stderr:
-        sys.stderr.write(eval_stderr)
+    eval_stdout_lines: list[str] = []
+    for line in proc.stdout:
+        sys.stdout.write(line)
+        sys.stdout.flush()
+        eval_stdout_lines.append(line)
+    proc.wait()
+    eval_stdout = "".join(eval_stdout_lines)
 
     metrics: dict[str, float] = {}
     for line in eval_stdout.splitlines():
