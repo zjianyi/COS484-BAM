@@ -39,7 +39,7 @@ MODEL_NAME       = "tiiuae/falcon-mamba-7b-instruct"
 DATA_PATH        = "SFT_OpenMath_data/annotated/qwen3_235b/annotated_samples.jsonl"
 ADAPTER_OUT_DIR  = "adapter"
 
-NUM_EXAMPLES     = 1000
+NUM_EXAMPLES     = 2000
 NUM_EPOCHS       = 3
 LEARNING_RATE    = 5e-4
 WARMUP_RATIO     = 0.05
