@@ -48,7 +48,7 @@ WEIGHT_DECAY     = 0.01
 LORA_RANK        = 32
 LORA_ALPHA       = 64
 LORA_DROPOUT     = 0.05
-LORA_TARGETS     = ["x_proj", "in_proj", "out_proj"]   # safe Mamba targets
+LORA_TARGETS     = ["x_proj", "in_proj", "dt_proj"]   # safe Mamba targets
 
 BATCH_SIZE       = 1
 GRAD_ACCUM       = 8
