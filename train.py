@@ -111,12 +111,12 @@ def build_dataset(tokenizer, rows: list[dict]) -> Dataset:
             {"role": "user", "content": row["problem"]},
             {"role": "assistant", "content": row["annotated_trace"]},
         ]
-        full_ids = tokenizer.apply_chat_template(
+        full_ids = list(tokenizer.apply_chat_template(
             messages, add_generation_prompt=False, tokenize=True
-        )
-        prompt_ids = tokenizer.apply_chat_template(
+        ))
+        prompt_ids = list(tokenizer.apply_chat_template(
             messages[:1], add_generation_prompt=True, tokenize=True
-        )
+        ))
         full_ids = full_ids[:MAX_SEQ_LEN]
         prompt_len = min(len(prompt_ids), len(full_ids))
 
@@ -197,7 +197,7 @@ def main() -> None:
 
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_NAME,
-        torch_dtype=torch.bfloat16,
+        dtype=torch.bfloat16,
         device_map="cuda",
         token=hf_token,
     )
