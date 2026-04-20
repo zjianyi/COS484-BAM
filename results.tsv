@@ -6,3 +6,4 @@ deeb460	0.872093	0.000000	7.000000	23.3	keep	2ep lr=5e-4 no-truncation (full tra
 d74d6c9	0.939891	0.000000	6.600000	24.0	keep	1000ex 3ep lr=5e-4 no-trunc budget→1.4ep (fast_eval) BIG JUMP
 a27c785	0.833333	0.000000	8.200000	23.8	drop	2000ex 3ep lr=5e-4 no-trunc budget→0.52ep only (fast_eval) under-trained
 848f798	0.939891	0.100000	3.400000	24.1	keep	1000ex 3ep lr=5e-4 no-trunc budget=50min (~2.8ep) tied best MAE↓ acc↑
+22b0162	0.968085	0.000000	3.000000	24.5	keep	rank=32 alpha=64 1000ex 3ep lr=5e-4 50min all3ep completed NEW BEST
