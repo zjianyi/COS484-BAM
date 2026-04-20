@@ -52,7 +52,7 @@ LORA_TARGETS     = ["x_proj", "in_proj"]   # safe Mamba targets
 
 BATCH_SIZE       = 1
 GRAD_ACCUM       = 8
-MAX_SEQ_LEN      = 2048
+MAX_SEQ_LEN      = 1024
 
 TIME_BUDGET_SEC  = 20 * 60      # hard wall-clock cap on trainer.train()
 SEED             = 42
@@ -229,7 +229,7 @@ def main() -> None:
         per_device_train_batch_size=BATCH_SIZE,
         gradient_accumulation_steps=GRAD_ACCUM,
         learning_rate=LEARNING_RATE,
-        warmup_ratio=WARMUP_RATIO,
+        warmup_steps=int(WARMUP_RATIO * NUM_EPOCHS * (NUM_EXAMPLES // (BATCH_SIZE * GRAD_ACCUM))),
         weight_decay=WEIGHT_DECAY,
         lr_scheduler_type="cosine",
         bf16=True,
