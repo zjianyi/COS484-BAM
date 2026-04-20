@@ -265,9 +265,9 @@ def main() -> None:
     del trainer, model
     torch.cuda.empty_cache()
 
-    print("Running evaluate.py", flush=True)
+    print("Running fast_eval.py", flush=True)
     proc = subprocess.Popen(
-        [sys.executable, "-u", "evaluate.py"],
+        [sys.executable, "-u", "fast_eval.py"],
         stdout=subprocess.PIPE,
         stderr=None,  # inherit stderr so it streams to run.log in real time
         text=True,
