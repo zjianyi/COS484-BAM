@@ -111,12 +111,14 @@ def build_dataset(tokenizer, rows: list[dict]) -> Dataset:
             {"role": "user", "content": row["problem"]},
             {"role": "assistant", "content": row["annotated_trace"]},
         ]
-        full_ids = list(tokenizer.apply_chat_template(
-            messages, add_generation_prompt=False, tokenize=True
-        ))
-        prompt_ids = list(tokenizer.apply_chat_template(
-            messages[:1], add_generation_prompt=True, tokenize=True
-        ))
+        full_text = tokenizer.apply_chat_template(
+            messages, add_generation_prompt=False, tokenize=False
+        )
+        prompt_text = tokenizer.apply_chat_template(
+            messages[:1], add_generation_prompt=True, tokenize=False
+        )
+        full_ids = tokenizer.encode(full_text, add_special_tokens=False)
+        prompt_ids = tokenizer.encode(prompt_text, add_special_tokens=False)
         full_ids = full_ids[:MAX_SEQ_LEN]
         prompt_len = min(len(prompt_ids), len(full_ids))
 
