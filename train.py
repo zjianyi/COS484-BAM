@@ -52,7 +52,7 @@ LORA_TARGETS     = ["x_proj", "in_proj"]   # safe Mamba targets
 
 BATCH_SIZE       = 1
 GRAD_ACCUM       = 8
-MAX_SEQ_LEN      = 1024
+MAX_SEQ_LEN      = 2048
 
 TIME_BUDGET_SEC  = 20 * 60      # hard wall-clock cap on trainer.train()
 SEED             = 42
