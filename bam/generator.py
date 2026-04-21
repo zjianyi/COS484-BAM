@@ -63,7 +63,8 @@ class BAMGenerator:
 
     def _capture_hook(self, module, inputs, output):
         hidden = output[0] if isinstance(output, tuple) else output
-        self.captured_hidden = hidden[:, -1:, :].detach()
+        model_dtype = next(self.model.parameters()).dtype
+        self.captured_hidden = hidden[:, -1:, :].detach().to(model_dtype)
         return output
 
     def _inject_hook(self, module, args):
