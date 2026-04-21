@@ -42,7 +42,7 @@ DATA_PATH        = "SFT_OpenMath_data/annotated/qwen3_235b/annotated_samples.jso
 
 NUM_EXAMPLES     = 1000
 NUM_EPOCHS       = 2
-LEARNING_RATE    = 3e-4
+LEARNING_RATE    = 5e-4
 WARMUP_RATIO     = 0.03
 WEIGHT_DECAY     = 0.0
 MAX_SEQ_LEN      = 2048
@@ -241,9 +241,18 @@ def bam_forward(
     lm_head = model.get_output_embeddings()
     logits = lm_head(h_prime)  # (1, T, V)
 
-    # 10) standard LM loss
+    # 10) focused LM loss — only tokens at and after first active read position
+    # This concentrates gradient where the cache injection matters rather than
+    # diluting it across the full sequence (~0.5% of tokens are read positions).
+    focused_labels = torch.full_like(labels, -100)
+    if any_avail.any():
+        min_read = int(read_pos[any_avail].min().item())
+        focused_labels[0, min_read:] = labels[0, min_read:]
+    else:
+        focused_labels = labels
+
     shift_logits = logits[:, :-1, :].contiguous()
-    shift_labels = labels[:, 1:].contiguous()
+    shift_labels = focused_labels[:, 1:].contiguous()
     loss = F.cross_entropy(
         shift_logits.view(-1, shift_logits.size(-1)).float(),
         shift_labels.view(-1),
