@@ -34,7 +34,7 @@ class StateCache(nn.Module):
         self.W_V = nn.Linear(d_model, d_attn, bias=False)
         self.W_out = nn.Linear(d_attn, d_model, bias=False)
         nn.init.zeros_(self.W_out.weight)
-        self.gate = nn.Parameter(torch.full((1,), -4.0))
+        self.gate = nn.Parameter(torch.full((1,), -2.0))
 
         self.keys: list[torch.Tensor] = []
         self.values: list[torch.Tensor] = []

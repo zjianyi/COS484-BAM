@@ -296,7 +296,7 @@ def main() -> None:
     device = next(model.parameters()).device
     cache = StateCache(
         d_model=hidden_size, d_attn=D_ATTN, max_entries=MAX_ENTRIES
-    ).to(device=device, dtype=torch.bfloat16)
+    ).to(device=device)  # float32: tiny module, gate needs fp32 precision
     cache.train()
     for p in cache.parameters():
         p.requires_grad = True
