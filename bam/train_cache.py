@@ -42,7 +42,7 @@ DATA_PATH        = "SFT_OpenMath_data/annotated/qwen3_235b/annotated_samples.jso
 
 NUM_EXAMPLES     = 1000
 NUM_EPOCHS       = 2
-LEARNING_RATE    = 1e-3
+LEARNING_RATE    = 1e-4
 WARMUP_RATIO     = 0.03
 WEIGHT_DECAY     = 0.0
 MAX_SEQ_LEN      = 2048
