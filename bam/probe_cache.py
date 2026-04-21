@@ -40,20 +40,18 @@ def main() -> None:
     device = torch.device("cuda")
 
     # ------------------------------------------------------------------ #
-    # 1. Gate health
+    # 1. W_out scale check (gate removed)
     # ------------------------------------------------------------------ #
     ckpt = torch.load(CACHE_CKPT_PATH, map_location="cpu")
     cfg = ckpt["config"]
     cache = StateCache(d_model=cfg["d_model"], d_attn=cfg["d_attn"], max_entries=cfg["max_entries"])
     cache.load_state_dict(ckpt["state_dict"])
-    gate_val = torch.sigmoid(cache.gate).item()
-    print(f"[probe 1] gate raw={cache.gate.item():.4f}  sigmoid(gate)={gate_val:.4f}")
-    if gate_val < 0.05:
-        print("  !! gate is nearly CLOSED — cache contributing ~0 at inference")
-    elif gate_val > 0.95:
-        print("  !! gate is nearly FULLY OPEN — may be too aggressive")
+    w_out_norm = cache.W_out.weight.norm().item()
+    print(f"[probe 1] W_out weight norm={w_out_norm:.4f} (0=untrained, >0=active)")
+    if w_out_norm < 1e-3:
+        print("  !! W_out is near-zero — cache not learning")
     else:
-        print("  gate looks healthy")
+        print("  W_out has trained")
 
     # ------------------------------------------------------------------ #
     # 2. Delta magnitude (requires model)
@@ -123,7 +121,7 @@ def main() -> None:
             if any_avail.any():
                 attn = scores[any_avail].softmax(dim=-1)
                 out = attn @ V
-                d = cache_module.W_out(out) * torch.sigmoid(cache_module.gate)
+                d = cache_module.W_out(out)
                 deltas = d
 
             h_norms = h[0, read_pos].norm(dim=-1)
