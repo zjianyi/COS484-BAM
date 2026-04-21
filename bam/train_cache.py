@@ -231,10 +231,12 @@ def bam_forward(
         h_prime[0, rows_to_update] = h_prime[0, rows_to_update] + delta[any_avail]
 
     # 9) frozen suffix (layers layer_idx+1..end). Checkpoint to save memory.
+    model_dtype = next(model.parameters()).dtype
+    h_prime = h_prime.to(model_dtype)
     for i in range(layer_idx + 1, len(layers)):
         h_prime = _run_layer_ckpt(layers[i], h_prime, use_checkpoint)
 
-    h_prime = backbone.norm_f(h_prime)
+    h_prime = backbone.norm_f(h_prime.to(model_dtype))
 
     lm_head = model.get_output_embeddings()
     logits = lm_head(h_prime)  # (1, T, V)
