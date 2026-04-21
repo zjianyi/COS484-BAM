@@ -54,14 +54,11 @@ class StateCache(nn.Module):
 
     @torch.no_grad()
     def write(self, h: torch.Tensor) -> None:
-        """Append a single (key, value) pair derived from hidden state `h`.
-
-        The hidden state is detached before projection so the cache does not
-        create a training dependency back through the frozen Mamba trunk.
-        """
+        """Append a single (key, value) pair derived from hidden state `h`."""
         h_vec = self._ensure_1d(h.detach())
-        k = self.W_K(h_vec)
-        v = self.W_V(h_vec)
+        w_dtype = self.W_K.weight.dtype
+        k = self.W_K(h_vec.to(w_dtype))
+        v = self.W_V(h_vec.to(w_dtype))
         self.keys.append(k)
         self.values.append(v)
         if len(self.keys) > self.max_entries:
@@ -71,14 +68,15 @@ class StateCache(nn.Module):
     def read(self, h: torch.Tensor) -> torch.Tensor:
         """Return `h + sigmoid(gate) * W_out(attn(Q(h), K, V))`.
 
-        If the cache is empty, returns `h` unchanged. Accepts `h` of shape
-        `(d_model,)` and returns the same shape.
+        Handles mixed dtypes: computation runs in the module's dtype, result
+        is cast back to the input dtype before returning.
         """
         h_vec = self._ensure_1d(h)
         if not self.keys:
             return h_vec
 
-        q = self.W_Q(h_vec)
+        w_dtype = self.W_Q.weight.dtype
+        q = self.W_Q(h_vec.to(w_dtype))
         keys = torch.stack(self.keys, dim=0)
         values = torch.stack(self.values, dim=0)
 
@@ -89,4 +87,5 @@ class StateCache(nn.Module):
         ).view(-1)
 
         out = self.W_out(attn)
-        return h_vec + torch.sigmoid(self.gate) * out
+        delta = (torch.sigmoid(self.gate) * out).to(h_vec.dtype)
+        return h_vec + delta
