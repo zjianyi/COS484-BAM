@@ -34,6 +34,9 @@ class StateCache(nn.Module):
         self.W_V = nn.Linear(d_model, d_attn, bias=False)
         self.W_out = nn.Linear(d_attn, d_model, bias=False)
         nn.init.zeros_(self.W_out.weight)
+        # Gate controls how much of the delta to apply; zero-init → sigmoid(0)=0.5 at start.
+        self.W_gate = nn.Linear(d_model, 1, bias=False)
+        nn.init.zeros_(self.W_gate.weight)
 
         self.keys: list[torch.Tensor] = []
         self.values: list[torch.Tensor] = []
@@ -85,5 +88,6 @@ class StateCache(nn.Module):
             values.view(1, 1, -1, self.d_attn),
         ).view(-1)
 
-        out = self.W_out(attn)
+        gate = torch.sigmoid(self.W_gate(h_vec.to(w_dtype)))  # (1,) scalar
+        out = self.W_out(attn) * gate
         return h_vec + out.to(h_vec.dtype)

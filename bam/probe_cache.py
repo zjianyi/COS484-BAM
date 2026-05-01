@@ -146,14 +146,16 @@ def main() -> None:
     # ------------------------------------------------------------------ #
     print(f"\n[probe 3] Cache-on vs cache-off on {PROBE_N} problems...")
 
-    def run_gen(gate_override: float | None) -> list[list[int]]:
+    def run_gen(disable_cache: bool = False) -> list[list[int]]:
         cm = StateCache(
             d_model=cfg["d_model"], d_attn=cfg["d_attn"], max_entries=cfg["max_entries"]
         ).to(device=device)
         cm.load_state_dict(ckpt["state_dict"])
         cm.eval()
-        if gate_override is not None:
-            cm.gate.data.fill_(gate_override)
+        if disable_cache:
+            # Zero out W_out to make injection a no-op
+            with torch.no_grad():
+                cm.W_out.weight.zero_()
 
         gen = BAMGenerator(model=model, tokenizer=tokenizer, cache_module=cm,
                            cache_layer_idx=layer_idx, cache_token=CACHE_TOKEN)
@@ -171,8 +173,8 @@ def main() -> None:
         return results
 
     with torch.no_grad():
-        on_outputs = run_gen(gate_override=None)
-        off_outputs = run_gen(gate_override=-10.0)
+        on_outputs = run_gen(disable_cache=False)
+        off_outputs = run_gen(disable_cache=True)
 
     n_differ = sum(1 for a, b in zip(on_outputs, off_outputs) if a != b)
     print(f"  {n_differ}/{PROBE_N} outputs differ between cache-on and cache-off")

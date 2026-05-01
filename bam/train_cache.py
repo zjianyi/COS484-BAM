@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 """Phase-2: train the BAM StateCache module on top of a frozen SFT model.
 
-The phase-1 LoRA adapter, the base Falcon Mamba weights, and the trained
-embed_tokens / lm_head are all frozen. Only the StateCache parameters are
-updated (~6MB). Training uses a custom forward pass that splits the
-backbone at a midpoint layer, injects retrieved state from the cache at
-positions immediately following a [CACHE] token, and backpropagates the
-LM loss through the cache module only.
+Supervised LM loss: teacher-forced over OpenMath annotated traces (which
+contain explicit [CACHE] tokens).  Injection at layer 62 (second-to-last)
+means only ONE frozen Mamba block remains in the backward gradient path,
+versus 32 in the earlier experiments that all used layer_idx=32.
 
 Usage:
     python -m bam.train_cache > bam_run.log 2>&1
@@ -17,6 +15,7 @@ from __future__ import annotations
 import json
 import os
 import random
+import re
 import subprocess
 import sys
 import time
@@ -25,7 +24,6 @@ from pathlib import Path
 import numpy as np
 import torch
 import torch.nn.functional as F
-from dotenv import load_dotenv
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -33,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from bam.cache import StateCache  # noqa: E402
 
 # ---------------------------------------------------------------------------
-# Hyperparameters (the phase-2 autoresearch loop sweeps these)
+# Hyperparameters
 # ---------------------------------------------------------------------------
 MODEL_NAME       = "tiiuae/falcon-mamba-7b-instruct"
 SFT_ADAPTER_DIR  = "adapter"
@@ -41,26 +39,23 @@ CACHE_OUT_PATH   = "bam/cache_module.pt"
 DATA_PATH        = "SFT_OpenMath_data/annotated/qwen3_235b/annotated_samples.jsonl"
 
 NUM_EXAMPLES     = 1000
-NUM_EPOCHS       = 2
-LEARNING_RATE    = 1e-3
-WARMUP_RATIO     = 0.03
-WEIGHT_DECAY     = 0.0
+NUM_EPOCHS       = 5
+LEARNING_RATE    = 2e-3
+WARMUP_RATIO     = 0.05
+WEIGHT_DECAY     = 1.0   # strong regularization: caps W_out_norm ≈ 1/WD ≈ 1.0
 MAX_SEQ_LEN      = 2048
-BATCH_SIZE       = 1
-GRAD_ACCUM       = 8
+GRAD_ACCUM       = 4
 
 D_ATTN           = 256
 MAX_ENTRIES      = 32
-CACHE_LAYER_IDX  = None         # None => num_hidden_layers // 2
+# Inject at second-to-last layer (-2 → 62 for 64-layer model).
+# Only 1 frozen Mamba block in the backward gradient path (vs 32 in all prior runs).
+CACHE_LAYER_IDX  = -2
 
-USE_CHECKPOINT   = True         # rematerialize post-cache layers in backward
-
-TIME_BUDGET_SEC  = 30 * 60
+USE_CHECKPOINT   = True
+TIME_BUDGET_SEC  = 4 * 3600
 SEED             = 42
 
-# ---------------------------------------------------------------------------
-# Fixed constants (do not sweep)
-# ---------------------------------------------------------------------------
 CACHE_TOKEN      = "[CACHE]"
 HELD_OUT_START   = 4970
 HELD_OUT_END     = 5000
@@ -76,7 +71,8 @@ def set_seed(seed: int) -> None:
 def _load_token() -> str | None:
     env_file = Path(__file__).resolve().parent.parent / ".env"
     if env_file.is_file():
-        load_dotenv(env_file)
+        from dotenv import load_dotenv as _ld
+        _ld(env_file)
     return os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN")
 
 
@@ -98,39 +94,13 @@ def load_train_rows() -> list[dict]:
             rows.append(json.loads(line))
             if len(rows) >= NUM_EXAMPLES:
                 break
-    if len(rows) < NUM_EXAMPLES:
-        print(
-            f"warning: requested NUM_EXAMPLES={NUM_EXAMPLES} but only loaded "
-            f"{len(rows)} rows from {DATA_PATH}",
-            file=sys.stderr,
-        )
+    print(f"Loaded {len(rows)} OpenMath train rows", flush=True)
     return rows
 
 
-def build_examples(tokenizer, rows: list[dict]) -> list[dict]:
-    """Tokenize each row as a user/assistant chat with loss masked on the prompt."""
-    out = []
-    for row in rows:
-        messages = [
-            {"role": "user", "content": row["problem"]},
-            {"role": "assistant", "content": row["annotated_trace"]},
-        ]
-        full_text = tokenizer.apply_chat_template(
-            messages, add_generation_prompt=False, tokenize=False
-        )
-        prompt_text = tokenizer.apply_chat_template(
-            messages[:1], add_generation_prompt=True, tokenize=False
-        )
-        full_ids = tokenizer.encode(full_text, add_special_tokens=False)
-        prompt_ids = tokenizer.encode(prompt_text, add_special_tokens=False)
-        prompt_len = min(len(prompt_ids), len(full_ids))
-        labels = list(full_ids)
-        for i in range(prompt_len):
-            labels[i] = -100
-        out.append({"input_ids": full_ids, "labels": labels})
-    return out
-
-
+# ---------------------------------------------------------------------------
+# Model plumbing
+# ---------------------------------------------------------------------------
 def _get_backbone(model):
     if hasattr(model, "backbone"):
         return model.backbone
@@ -146,9 +116,7 @@ def _get_backbone(model):
 
 def _run_layer(layer, h):
     out = layer(h)
-    if isinstance(out, tuple):
-        return out[0]
-    return out
+    return out[0] if isinstance(out, tuple) else out
 
 
 def _run_layer_ckpt(layer, h, use_checkpoint: bool):
@@ -159,6 +127,9 @@ def _run_layer_ckpt(layer, h, use_checkpoint: bool):
     )
 
 
+# ---------------------------------------------------------------------------
+# Supervised LM-loss forward with cache injection
+# ---------------------------------------------------------------------------
 def bam_forward(
     model,
     cache: StateCache,
@@ -168,90 +139,91 @@ def bam_forward(
     layer_idx: int,
     use_checkpoint: bool,
 ) -> torch.Tensor:
-    """Custom forward with layer-split + causal-masked cross-attention injection.
+    """CE loss with cache delta injected at layer_idx.
 
-    Returns the LM loss (scalar) with gradients flowing only through the
-    StateCache parameters.
+    Layers 0..layer_idx run in no_grad (frozen prefix).
+    Cache delta is computed with grad from cache parameters.
+    Layers layer_idx+1..N-1 run with grad tracking so delta propagates.
+    Returns 0-loss (no_grad) when no [CACHE] tokens are present.
     """
     backbone = _get_backbone(model)
     layers = backbone.layers
     d_attn = cache.W_Q.out_features
 
-    # 1) embed
     embed = model.get_input_embeddings()
-    h = embed(input_ids)  # (1, T, D)
+    h = embed(input_ids)
 
-    # 2) frozen prefix (layers 0..layer_idx inclusive)
     with torch.no_grad():
         for i in range(layer_idx + 1):
             h = _run_layer(layers[i], h)
 
-    # 3) identify cache positions and the positions we'll inject into
     toks = input_ids[0]
     cache_pos = (toks == cache_id).nonzero(as_tuple=True)[0]
     if cache_pos.numel() == 0:
-        # No [CACHE] tokens in this sequence — nothing for the cache to learn
-        # from. Return a zero loss with a stable graph on cache params.
-        return (cache.gate.float().sum() * 0.0).to(h.dtype)
+        return torch.tensor(0.0, device=h.device, dtype=h.dtype, requires_grad=True)
 
     read_pos = cache_pos + 1
     read_pos = read_pos[read_pos < toks.numel()]
-
-    # 4) keys/values from cache positions (detached, matching inference)
-    cache_dtype = cache.W_K.weight.dtype
-    cache_src = h[0, cache_pos].detach().to(cache_dtype)  # (N, D)
-    K = cache.W_K(cache_src)              # (N, d_attn)
-    V = cache.W_V(cache_src)              # (N, d_attn)
-
     if read_pos.numel() == 0:
-        # all [CACHE] at last position; no reads
-        return (cache.gate.float().sum() * 0.0).to(h.dtype)
+        return torch.tensor(0.0, device=h.device, dtype=h.dtype, requires_grad=True)
 
-    # 5) queries from read positions (gradients flow)
-    Q = cache.W_Q(h[0, read_pos].to(cache_dtype))         # (M, d_attn)
+    cache_dtype = cache.W_K.weight.dtype
+    cache_src = h[0, cache_pos].detach().to(cache_dtype)
+    K = cache.W_K(cache_src)
+    V = cache.W_V(cache_src)
 
-    # 6) causal mask: entry j available for read i iff cache_pos[j] < read_pos[i]
-    avail = cache_pos[None, :] < read_pos[:, None]  # (M, N) bool
-    any_avail = avail.any(dim=-1)                   # (M,)
+    Q = cache.W_Q(h[0, read_pos].to(cache_dtype))
+    avail = cache_pos[None, :] < read_pos[:, None]
+    any_avail = avail.any(dim=-1)
 
-    # 7) masked cross-attention (only non-empty rows)
     scores = (Q @ K.transpose(0, 1)) / (d_attn ** 0.5)
     scores = scores.masked_fill(~avail, float("-inf"))
     delta = torch.zeros_like(h[0, read_pos])
     if any_avail.any():
         attn = scores[any_avail].softmax(dim=-1)
         out = attn @ V
-        d = cache.W_out(out)
+        gate = torch.sigmoid(cache.W_gate(h[0, read_pos][any_avail].to(cache_dtype)))
+        d = cache.W_out(out) * gate
         delta[any_avail] = d.to(delta.dtype)
 
-    # 8) inject delta onto layer-idx output at read positions
     h_prime = h.clone()
     if any_avail.any():
         rows_to_update = read_pos[any_avail]
         h_prime[0, rows_to_update] = h_prime[0, rows_to_update] + delta[any_avail]
 
-    # 9) frozen suffix (layers layer_idx+1..end). Checkpoint to save memory.
     model_dtype = next(model.parameters()).dtype
     h_prime = h_prime.to(model_dtype)
     for i in range(layer_idx + 1, len(layers)):
         h_prime = _run_layer_ckpt(layers[i], h_prime, use_checkpoint)
 
     h_prime = backbone.norm_f(h_prime.to(model_dtype))
+    logits = model.get_output_embeddings()(h_prime)
 
-    lm_head = model.get_output_embeddings()
-    logits = lm_head(h_prime)  # (1, T, V)
+    # Focused loss: compute CE only at the tokens immediately predicted by
+    # cache-modified logits (logits[read_pos] predicts labels[read_pos+1]).
+    # This avoids 2000x gradient dilution from the full-sequence average.
+    seq_len = labels.shape[1]
+    # read_pos are the positions where the cache delta is injected.
+    # logits[read_pos] is what we want to train — the prediction right after cache.
+    target_pos = read_pos[read_pos + 1 < seq_len] + 1   # labels[read_pos+1] = target tokens
+    if target_pos.numel() == 0:
+        return torch.tensor(0.0, device=h.device, dtype=h.dtype, requires_grad=True)
+    focused_labels = labels.clone()
+    focused_labels[0, :] = -100
+    focused_labels[0, target_pos] = labels[0, target_pos]
 
-    # 10) standard LM loss over full sequence
     shift_logits = logits[:, :-1, :].contiguous()
-    shift_labels = labels[:, 1:].contiguous()
-    loss = F.cross_entropy(
+    shift_labels = focused_labels[:, 1:].contiguous()
+    return F.cross_entropy(
         shift_logits.view(-1, shift_logits.size(-1)).float(),
         shift_labels.view(-1),
         ignore_index=-100,
     )
-    return loss
 
 
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
 def main() -> None:
     set_seed(SEED)
     t_start = time.time()
@@ -263,10 +235,7 @@ def main() -> None:
         tokenizer.pad_token = tokenizer.eos_token
 
     model = AutoModelForCausalLM.from_pretrained(
-        MODEL_NAME,
-        dtype=torch.bfloat16,
-        device_map="cuda",
-        token=hf_token,
+        MODEL_NAME, dtype=torch.bfloat16, device_map="cuda", token=hf_token,
     )
     cache_id = add_cache_token(tokenizer, model)
 
@@ -279,85 +248,93 @@ def main() -> None:
     num_layers = config.num_hidden_layers
     hidden_size = config.hidden_size
     layer_idx = CACHE_LAYER_IDX if CACHE_LAYER_IDX is not None else num_layers // 2
-    print(
-        f"num_hidden_layers={num_layers} hidden_size={hidden_size} cache_layer_idx={layer_idx}",
-        flush=True,
-    )
+    if layer_idx < 0:
+        layer_idx = num_layers + layer_idx
+    print(f"num_hidden_layers={num_layers} hidden_size={hidden_size} cache_layer_idx={layer_idx}", flush=True)
 
     device = next(model.parameters()).device
-    cache = StateCache(
-        d_model=hidden_size, d_attn=D_ATTN, max_entries=MAX_ENTRIES
-    ).to(device=device)  # float32: tiny module, gate needs fp32 precision
+    cache = StateCache(d_model=hidden_size, d_attn=D_ATTN, max_entries=MAX_ENTRIES).to(device=device)
     cache.train()
     for p in cache.parameters():
         p.requires_grad = True
+    print(f"cache trainable params: {sum(p.numel() for p in cache.parameters()):,}", flush=True)
 
-    trainable = sum(p.numel() for p in cache.parameters() if p.requires_grad)
-    print(f"cache trainable params: {trainable:,}", flush=True)
-
-    print(f"Loading training rows from {DATA_PATH}", flush=True)
     rows = load_train_rows()
-    print(f"Tokenizing {len(rows)} examples", flush=True)
-    examples = build_examples(tokenizer, rows)
+
+    total_opt_steps_est = (NUM_EPOCHS * len(rows)) // GRAD_ACCUM
+    warmup_steps = max(1, int(WARMUP_RATIO * total_opt_steps_est))
 
     optimizer = torch.optim.AdamW(
-        cache.parameters(),
-        lr=LEARNING_RATE,
-        weight_decay=WEIGHT_DECAY,
+        cache.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY,
     )
-
-    total_micro_steps = NUM_EPOCHS * len(examples)
-    total_opt_steps = max(1, total_micro_steps // GRAD_ACCUM)
-    warmup_steps = max(1, int(WARMUP_RATIO * total_opt_steps))
 
     def lr_at(step: int) -> float:
         if step < warmup_steps:
             return step / warmup_steps
-        progress = (step - warmup_steps) / max(1, total_opt_steps - warmup_steps)
+        progress = (step - warmup_steps) / max(1, total_opt_steps_est - warmup_steps)
         return 0.5 * (1.0 + np.cos(np.pi * min(1.0, progress)))
 
     torch.cuda.reset_peak_memory_stats()
-    print(f"Starting training (budget {TIME_BUDGET_SEC}s)", flush=True)
 
     micro_step = 0
     opt_step = 0
-    running_loss = 0.0
-    running_n = 0
     stopped_by_budget = False
     optimizer.zero_grad(set_to_none=True)
+    total_loss_sum = 0.0
+    total_examples = 0
 
     for epoch in range(NUM_EPOCHS):
-        order = list(range(len(examples)))
+        order = list(range(len(rows)))
         random.shuffle(order)
+        epoch_loss_sum = 0.0
+        epoch_count = 0
+
         for idx in order:
             if time.time() - t_start > TIME_BUDGET_SEC:
                 stopped_by_budget = True
                 break
 
-            ex = examples[idx]
-            ids = ex["input_ids"]
-            lbls = ex["labels"]
-            if len(ids) > MAX_SEQ_LEN:
-                # keep the end of the trace where the answer lives
-                ids = ids[-MAX_SEQ_LEN:]
-                lbls = lbls[-MAX_SEQ_LEN:]
+            row = rows[idx]
 
-            input_ids = torch.tensor([ids], dtype=torch.long, device=device)
-            labels = torch.tensor([lbls], dtype=torch.long, device=device)
+            # Build teacher-forced sequence: prompt + annotated trace
+            msgs = [{"role": "user", "content": row["problem"]}]
+            prompt_ids = tokenizer.apply_chat_template(
+                msgs, add_generation_prompt=True, tokenize=True, return_tensors="pt"
+            ).to(device)
+            trace_ids = tokenizer(
+                row["annotated_trace"],
+                return_tensors="pt",
+                add_special_tokens=False,
+            ).input_ids.to(device)
+            eos_tensor = torch.tensor([[tokenizer.eos_token_id]], device=device)
+            full_ids = torch.cat([prompt_ids, trace_ids, eos_tensor], dim=1)
 
+            if full_ids.shape[1] > MAX_SEQ_LEN:
+                full_ids = full_ids[:, :MAX_SEQ_LEN]
+
+            lab = full_ids.clone()
+            lab[0, : prompt_ids.shape[1]] = -100   # mask prompt tokens
+
+            elapsed = time.time() - t_start
             loss = bam_forward(
-                model=model,
-                cache=cache,
-                input_ids=input_ids,
-                labels=labels,
-                cache_id=cache_id,
-                layer_idx=layer_idx,
-                use_checkpoint=USE_CHECKPOINT,
+                model=model, cache=cache, input_ids=full_ids, labels=lab,
+                cache_id=cache_id, layer_idx=layer_idx, use_checkpoint=USE_CHECKPOINT,
             )
+
+            if loss.item() == 0.0:
+                # No [CACHE] tokens in this example — skip
+                micro_step += 1
+                if micro_step % GRAD_ACCUM == 0:
+                    optimizer.zero_grad(set_to_none=True)
+                    opt_step += 1
+                continue
+
             (loss / GRAD_ACCUM).backward()
-            running_loss += float(loss.detach())
-            running_n += 1
             micro_step += 1
+            epoch_loss_sum += loss.item()
+            total_loss_sum += loss.item()
+            epoch_count += 1
+            total_examples += 1
 
             if micro_step % GRAD_ACCUM == 0:
                 for pg in optimizer.param_groups:
@@ -367,21 +344,31 @@ def main() -> None:
                 optimizer.zero_grad(set_to_none=True)
                 opt_step += 1
 
-                if opt_step % 10 == 0:
-                    avg = running_loss / max(1, running_n)
-                    elapsed = time.time() - t_start
+                if opt_step % 20 == 0:
+                    avg_loss = total_loss_sum / max(1, total_examples)
+                    w_out_norm = cache.W_out.weight.data.norm().item()
                     print(
-                        f"epoch {epoch} opt_step {opt_step}/{total_opt_steps} "
-                        f"loss={avg:.4f} lr={pg['lr']:.2e} elapsed={elapsed:.0f}s",
+                        f"epoch {epoch} opt_step {opt_step} "
+                        f"avg_loss={avg_loss:.4f} "
+                        f"W_out_norm={w_out_norm:.4f} "
+                        f"lr={optimizer.param_groups[0]['lr']:.2e} elapsed={elapsed:.0f}s",
                         flush=True,
                     )
-                    running_loss = 0.0
-                    running_n = 0
 
+        epoch_avg = epoch_loss_sum / max(1, epoch_count)
+        w_out_norm = cache.W_out.weight.data.norm().item()
+        print(f"epoch {epoch} done: {epoch_count} examples, avg_loss={epoch_avg:.4f} W_out_norm={w_out_norm:.4f}", flush=True)
+        # Save per-epoch checkpoint so we can recover the best point
+        ckpt_path = Path(CACHE_OUT_PATH).with_suffix(f".ep{epoch}.pt")
+        torch.save({
+            "state_dict": {k: v.detach().cpu() for k, v in cache.state_dict().items()},
+            "config": {"d_model": hidden_size, "d_attn": D_ATTN,
+                       "max_entries": MAX_ENTRIES, "cache_layer_idx": layer_idx},
+        }, ckpt_path)
         if stopped_by_budget:
             break
 
-    # flush any remaining grads
+    # flush remaining grads
     if micro_step % GRAD_ACCUM != 0:
         torch.nn.utils.clip_grad_norm_(cache.parameters(), 1.0)
         optimizer.step()
@@ -390,19 +377,22 @@ def main() -> None:
 
     training_seconds = time.time() - t_start
     peak_vram_mb = torch.cuda.max_memory_allocated() / (1024 ** 2)
+    final_avg_loss = total_loss_sum / max(1, total_examples)
+    print(
+        f"Training done: {total_examples} examples, avg_loss={final_avg_loss:.4f}, "
+        f"{opt_step} opt steps in {training_seconds:.0f}s",
+        flush=True,
+    )
 
     out_path = Path(CACHE_OUT_PATH)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    state = {
+    torch.save({
         "state_dict": {k: v.detach().cpu() for k, v in cache.state_dict().items()},
         "config": {
-            "d_model": hidden_size,
-            "d_attn": D_ATTN,
-            "max_entries": MAX_ENTRIES,
-            "cache_layer_idx": layer_idx,
+            "d_model": hidden_size, "d_attn": D_ATTN,
+            "max_entries": MAX_ENTRIES, "cache_layer_idx": layer_idx,
         },
-    }
-    torch.save(state, out_path)
+    }, out_path)
     print(f"Saved cache to {out_path}", flush=True)
 
     del model
@@ -411,10 +401,7 @@ def main() -> None:
     print("Running bam/evaluate_bam.py", flush=True)
     proc = subprocess.Popen(
         [sys.executable, "-u", "-m", "bam.evaluate_bam"],
-        stdout=subprocess.PIPE,
-        stderr=None,
-        text=True,
-        bufsize=1,
+        stdout=subprocess.PIPE, stderr=None, text=True, bufsize=1,
     )
     eval_lines: list[str] = []
     assert proc.stdout is not None
@@ -444,11 +431,11 @@ def main() -> None:
     print(f"training_seconds:  {training_seconds:.1f}")
     print(f"total_seconds:     {total_seconds:.1f}")
     print(f"peak_vram_mb:      {peak_vram_mb:.1f}")
+    print(f"avg_loss:          {final_avg_loss:.4f}")
     print(f"num_examples:      {len(rows)}")
     print(f"num_epochs:        {NUM_EPOCHS}")
     print(f"learning_rate:     {LEARNING_RATE}")
     print(f"d_attn:            {D_ATTN}")
-    print(f"max_entries:       {MAX_ENTRIES}")
     print(f"cache_layer_idx:   {layer_idx}")
     print(f"stopped_by_budget: {stopped_by_budget}")
 

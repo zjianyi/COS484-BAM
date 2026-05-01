@@ -1,0 +1,23 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Model checkpoints and data (too large for git)
+*.pt
+*.safetensors
+adapter/
+SFT_OpenMath_data/
+
+# Logs
+*.log
+*.tsv
+
+# OS / editor
+.DS_Store
+.claude/

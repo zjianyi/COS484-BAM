@@ -10,6 +10,12 @@ OpenMath problems (indices 4970..4999), and prints three metrics:
   - math_accuracy:   fraction of held-out problems answered correctly (free-gen)
   - cache_count_mae: MAE between number of [CACHE] tokens emitted and oracle count (free-gen)
 
+math_accuracy uses a two-stage check:
+  1. Fast heuristic: boxed-answer extraction + numeric comparison.
+  2. LLM judge (JUDGE_MODEL via HF Inference API): called only when the heuristic
+     says the answer is WRONG. This catches word-problem answers, equivalent LaTeX
+     forms, and other cases where the heuristic produces false negatives.
+
 Output format (parsed by train.py):
     cache_f1: <float>
     math_accuracy: <float>
@@ -25,6 +31,7 @@ from pathlib import Path
 
 import torch
 from dotenv import load_dotenv
+from huggingface_hub import InferenceClient
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -34,11 +41,15 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 MODEL_NAME       = "tiiuae/falcon-mamba-7b-instruct"
 ADAPTER_DIR      = "adapter"
 DATA_PATH        = "SFT_OpenMath_data/annotated/qwen3_235b/annotated_samples.jsonl"
-HELD_OUT_START   = 4970
+HELD_OUT_START   = 4980
 HELD_OUT_END     = 5000
 MAX_NEW_TOKENS   = 2048
 EVAL_SEED        = 0
 CACHE_TOKEN      = "[CACHE]"
+
+# Judge model used as fallback when the heuristic checker says "wrong".
+# Any chat model available on the HF serverless inference API works here.
+JUDGE_MODEL      = "Qwen/Qwen2.5-7B-Instruct"
 
 
 def _load_token() -> str | None:
@@ -114,6 +125,7 @@ def _last_number(text: str) -> str | None:
 
 
 def answers_match(pred_text: str, expected: str) -> bool:
+    """Fast heuristic check: extract \\boxed{} or last number, normalize, compare."""
     pred_boxed = _extract_boxed(pred_text)
     pred_candidate = pred_boxed if pred_boxed is not None else _last_number(pred_text)
     if pred_candidate is None:
@@ -126,6 +138,60 @@ def answers_match(pred_text: str, expected: str) -> bool:
         return abs(float(p) - float(e)) < 1e-6
     except ValueError:
         return False
+
+
+_JUDGE_PROMPT = """\
+You are a strict math answer checker. Your only job is to decide whether the \
+student's final answer is mathematically equivalent to the correct answer.
+
+Problem:
+{problem}
+
+Correct answer: {expected}
+
+Student's solution (last 800 characters):
+{solution_tail}
+
+Is the student's final answer mathematically equivalent to the correct answer? \
+Reply with exactly one word: YES or NO."""
+
+
+def llm_judge(problem: str, expected: str, pred_text: str, client: InferenceClient) -> bool:
+    """Call the judge model via HF Inference API.
+
+    Returns True if the judge says the answer is correct, False otherwise
+    (including on any API error, to avoid inflating accuracy on failures).
+    """
+    solution_tail = pred_text[-800:] if len(pred_text) > 800 else pred_text
+    prompt = _JUDGE_PROMPT.format(
+        problem=problem,
+        expected=expected,
+        solution_tail=solution_tail,
+    )
+    try:
+        response = client.chat_completion(
+            messages=[{"role": "user", "content": prompt}],
+            model=JUDGE_MODEL,
+            max_tokens=8,
+            temperature=0.0,
+        )
+        verdict = response.choices[0].message.content.strip().upper()
+        return verdict.startswith("YES")
+    except Exception as exc:
+        try:
+            print(f"  [judge error: {exc}]", flush=True)
+        except (BrokenPipeError, OSError):
+            pass
+        return False
+
+
+def is_correct(problem: str, expected: str, pred_text: str, client: InferenceClient | None) -> bool:
+    """Two-stage correctness: fast heuristic first, LLM judge as fallback."""
+    if answers_match(pred_text, expected):
+        return True
+    if client is None:
+        return False
+    return llm_judge(problem, expected, pred_text, client)
 
 
 # ---------------------------------------------------------------------------
@@ -194,7 +260,9 @@ def compute_cache_f1(model, tokenizer, rows: list[dict], cache_id: int) -> float
 # Free-generation pass (math_accuracy + cache_count_mae)
 # ---------------------------------------------------------------------------
 @torch.no_grad()
-def run_free_generation(model, tokenizer, rows: list[dict], cache_id: int) -> tuple[float, float]:
+def run_free_generation(
+    model, tokenizer, rows: list[dict], cache_id: int, judge_client: InferenceClient | None
+) -> tuple[float, float]:
     device = next(model.parameters()).device
     correct = 0
     cache_abs_errors: list[float] = []
@@ -220,13 +288,26 @@ def run_free_generation(model, tokenizer, rows: list[dict], cache_id: int) -> tu
 
         text = tokenizer.decode(new_ids, skip_special_tokens=False)
         text_no_cache = text.replace(CACHE_TOKEN, "")
-        if answers_match(text_no_cache, str(row["expected_answer"])):
+        expected = str(row["expected_answer"])
+
+        heuristic_ok = answers_match(text_no_cache, expected)
+        if heuristic_ok:
+            ok = True
+            verdict_label = "heuristic"
+        elif judge_client is not None:
+            ok = llm_judge(row["problem"], expected, text_no_cache, judge_client)
+            verdict_label = "judge=YES" if ok else "judge=NO"
+        else:
+            ok = False
+            verdict_label = "no_judge"
+
+        if ok:
             correct += 1
 
         print(
             f"[eval {idx + 1}/{len(rows)}] cache_pred={n_cache_pred} "
             f"cache_oracle={row.get('num_cache_tokens')} "
-            f"answer_ok={answers_match(text_no_cache, str(row['expected_answer']))}",
+            f"answer_ok={ok} ({verdict_label})",
             flush=True,
         )
 
@@ -259,8 +340,18 @@ def main() -> None:
     rows = load_held_out()
     print(f"Loaded {len(rows)} held-out problems (indices {HELD_OUT_START}..{HELD_OUT_END - 1})", flush=True)
 
+    judge_client: InferenceClient | None = None
+    if hf_token:
+        try:
+            judge_client = InferenceClient(token=hf_token)
+            print(f"Judge enabled: {JUDGE_MODEL}", flush=True)
+        except Exception as exc:
+            print(f"Judge disabled (could not create InferenceClient: {exc})", flush=True)
+    else:
+        print("Judge disabled (no HF token found; set HF_TOKEN in .env)", flush=True)
+
     print("Running free-generation pass (math_accuracy + cache_count_mae)", flush=True)
-    math_acc, cache_mae = run_free_generation(model, tokenizer, rows, cache_id)
+    math_acc, cache_mae = run_free_generation(model, tokenizer, rows, cache_id, judge_client)
 
     print("Running teacher-forced pass (cache_f1)", flush=True)
     cache_f1 = compute_cache_f1(model, tokenizer, rows, cache_id)
