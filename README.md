@@ -1,6 +1,6 @@
 # BAM: Bolt-on Associative Memory for FalconMamba 7B
 
-COS484 Final Project, Princeton University, Spring 2025.
+COS484 Final Project, Princeton University, Spring 2026.
 
 StateCache is a 4.2M-parameter cross-attention memory module that bolts onto a frozen FalconMamba 7B backbone. It intercepts the model's hidden state at layer 62, writes compressed snapshots at selected `[CACHE]` token positions, and retrieves relevant entries at query time — all without modifying any backbone weights. The overall pipeline remains O(n) because the cache cross-attention operates over k=4 entries (constant), not the full sequence.
 
