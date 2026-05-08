@@ -1,3 +1,8 @@
+> Current architecture note: this file is an early implementation sketch and
+> includes prototype details that differ from the current BABILong code. For the
+> current architecture, training path, saved weights, and ablation knobs, see
+> `ARCHITECTURE_DEEP_DIVE.md`.
+
 Great — 0.96 F1 on cache placement means the model reliably produces `[CACHE]` at the right locations. The SFT is done. Now we build the actual BAM cache module.
 
 Let me lay out exactly what you need to implement, in order.
