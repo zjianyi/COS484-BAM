@@ -1,0 +1,135 @@
+{
+  "timestamp_utc": "2026-05-09T15:39:27Z",
+  "run_id": "scaffold_loss_k4_layer62",
+  "cells_output": "metrics/scaffold_baselines/scaffold_loss_k4_layer62.cells.jsonl",
+  "total_seconds": 1910.104783296585,
+  "config": {
+    "model_name": "tiiuae/falcon-mamba-7b-instruct",
+    "cache_layer_idx": 62,
+    "placement": "loss",
+    "top_k": 4,
+    "regex_cap_k": null,
+    "gate": "on",
+    "causal_mask": "on",
+    "loss_mode": "focused",
+    "train_tasks": [
+      "qa1",
+      "qa2",
+      "qa3"
+    ],
+    "train_lengths": [
+      "0k",
+      "1k",
+      "2k"
+    ],
+    "eval_tasks": [
+      "qa1",
+      "qa2",
+      "qa3"
+    ],
+    "eval_lengths": [
+      "0k",
+      "1k",
+      "2k",
+      "4k",
+      "8k",
+      "16k"
+    ],
+    "n_eval": 50,
+    "max_seq_len": 16384,
+    "seed": 42,
+    "scaffold_only": true
+  },
+  "eval": {
+    "qa1/0k": {
+      "baseline_correct": 0,
+      "total": 50,
+      "baseline_acc": 0.0
+    },
+    "qa1/1k": {
+      "baseline_correct": 0,
+      "total": 50,
+      "baseline_acc": 0.0
+    },
+    "qa1/2k": {
+      "baseline_correct": 0,
+      "total": 50,
+      "baseline_acc": 0.0
+    },
+    "qa1/4k": {
+      "baseline_correct": 0,
+      "total": 50,
+      "baseline_acc": 0.0
+    },
+    "qa1/8k": {
+      "baseline_correct": 0,
+      "total": 50,
+      "baseline_acc": 0.0
+    },
+    "qa1/16k": {
+      "baseline_correct": 0,
+      "total": 50,
+      "baseline_acc": 0.0
+    },
+    "qa2/0k": {
+      "baseline_correct": 0,
+      "total": 50,
+      "baseline_acc": 0.0
+    },
+    "qa2/1k": {
+      "baseline_correct": 0,
+      "total": 50,
+      "baseline_acc": 0.0
+    },
+    "qa2/2k": {
+      "baseline_correct": 0,
+      "total": 50,
+      "baseline_acc": 0.0
+    },
+    "qa2/4k": {
+      "baseline_correct": 0,
+      "total": 50,
+      "baseline_acc": 0.0
+    },
+    "qa2/8k": {
+      "baseline_correct": 0,
+      "total": 50,
+      "baseline_acc": 0.0
+    },
+    "qa2/16k": {
+      "baseline_correct": 0,
+      "total": 50,
+      "baseline_acc": 0.0
+    },
+    "qa3/0k": {
+      "baseline_correct": 0,
+      "total": 50,
+      "baseline_acc": 0.0
+    },
+    "qa3/1k": {
+      "baseline_correct": 0,
+      "total": 50,
+      "baseline_acc": 0.0
+    },
+    "qa3/2k": {
+      "baseline_correct": 0,
+      "total": 50,
+      "baseline_acc": 0.0
+    },
+    "qa3/4k": {
+      "baseline_correct": 0,
+      "total": 50,
+      "baseline_acc": 0.0
+    },
+    "qa3/8k": {
+      "baseline_correct": 0,
+      "total": 50,
+      "baseline_acc": 0.0
+    },
+    "qa3/16k": {
+      "baseline_correct": 0,
+      "total": 50,
+      "baseline_acc": 0.0
+    }
+  }
+}
