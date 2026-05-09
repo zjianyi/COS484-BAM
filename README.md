@@ -4,7 +4,60 @@ COS484 Final Project, Princeton University, Spring 2026.
 
 StateCache is a 4.2M-parameter cross-attention memory module that bolts onto a frozen FalconMamba 7B backbone. It intercepts the model's hidden state at layer 62, writes compressed snapshots at selected `[CACHE]` token positions, and retrieves relevant entries at query time — all without modifying any backbone weights. The overall pipeline remains O(n) because the cache cross-attention operates over k=4 entries (constant), not the full sequence.
 
-See `writeup.md` for the full project notes and results.
+See `writeup.md` for historical project notes and early Phase 2 numbers. **Current BABILong reporting** (protocols, prompts, and LaTeX/PDF tables) is summarized below and in `docs/`.
+
+---
+
+## BABILong evaluation protocols (read this before comparing numbers)
+
+**What `[CACHE]` means.** Special tokens (`[CACHE]`) are **inserted into the prompt text**. They mark fixed positions where **StateCache** can write/read compressed snapshots in the hidden state. This is **not** HuggingFace KV-cache or disk cache.
+
+**Prompts differ across protocols.** You cannot mix rows from different tables without reading the caption:
+
+| Protocol | Script | Few-shot? | `[CACHE]` in prompt? | Main metric to report |
+|----------|--------|-----------|----------------------|----------------------|
+| Plain no-cache baseline | `eval_babilongv2.py` | Optional (`--few-shot-examples`; default `0`; use `>0` for paper few-shot + **`--babilong-scoring next_token`** for candidate log-probs) | **No** | Next-token accuracy vs candidate answers |
+| Inline ablation (train + eval) | `train_babilong_ablation.py` | **No** | **Yes** (placement policy) | `cache_acc` with StateCache; `baseline_acc` = scaffold-only control |
+| Paper-style + cache scaffold | `eval_babilong_paper_scaffold_checkpoint.py` | **Yes** (paper BABILong layout) | **Yes** | `cache_acc` |
+| Legacy chat generate | `eval_babilong.py` | Chat template | No `[CACHE]` in user text (vocab may still be resized) | Diagnostic only |
+
+**`cache_acc` vs `baseline_acc` (inline JSON metrics).**
+
+- **`cache_acc`:** `[CACHE]` tokens present **and** StateCache applied — the trained module’s accuracy.
+- **`baseline_acc`:** **Same tokenized prompt** (same `[CACHE]` placements), but **no** StateCache delta — *scaffold-only*. This checks whether the backbone can still answer with extra tokens in the string; it is **not** comparable to `eval_babilongv2` and often collapses toward 0%. Do **not** treat it as the “no cache” baseline for external comparison.
+
+**Fair baselines.**
+
+- **vs plain Falcon-Mamba (no `[CACHE]`):** use `eval_babilongv2` with `--few-shot-examples 0` (zero-shot) or match few-shot count to your scaffold eval; compare to **`metrics/zero_shot_baseline/`** or reasoning-curves JSON as documented below. For **few-shot with true candidate logit scoring** (same `top_logprobs` protocol as zero-shot, not prefix-on-generation), run `--babilong-scoring next_token --few-shot-examples 2` — Slurm: **`jobs/neuronic_babilong_fewshot_next_token_baseline.sbatch`** → `metrics/fewshot_babilong/no_cache_baseline_next_token_qa1_qa3.json`.
+- **vs StateCache under the same prompt:** compare **`cache_acc`** to **`baseline_acc`** from the **same** run (matched scaffold).
+
+**Few-shot vs zero-shot tail behavior.** Few-shot paper prompts prepend instructions + examples, so **total sequence length** is much larger than the short plain prompt at the same nominal BABILong length (e.g. `16k`). Long-context accuracy can drop sharply for few-shot while zero-shot stays moderate — same distractor passage, **different total tokens and prefix**.
+
+---
+
+## Results tables and metrics layout
+
+**Paper-ready PDFs** (also `.tex` fragments for Overleaf) live under `docs/`:
+
+| File | What it shows |
+|------|----------------|
+| `docs/ablation_results_table.tex` | **Zero-shot only:** plain no-cache baseline (`metrics/zero_shot_baseline/…`, `eval_babilongv2`) + StateCache `cache_acc` from root `metrics/<run_id>.json`. Do **not** mix with few-shot cells. |
+| `docs/ablation_cache_scaffold_zero_shot_table.tex` | **Zero-shot + `[CACHE]` scaffold:** scaffold-only (`metrics/scaffold_baselines/…`) + same `cache_acc` as main zero-shot StateCache rows. |
+| `docs/fewshot_babilong_results_table.tex` | **Few-shot only:** `metrics/fewshot_babilong/` (`no_cache_baseline.json` + per-run `cache_acc`). Different protocol than zero-shot table. |
+
+Table numbers were filled from local `metrics/**/*.json` when building those docs (QA1–QA3 × six lengths; rounded to one decimal); those paths are not in git—keep your Neuronic rsync or regenerate.
+
+**Suggested `metrics/` layout (convention):** this directory is **gitignored**—nothing under `metrics/` is committed; regenerate or copy from your cluster run.
+
+
+- `metrics/fewshot_babilong/` — outputs from `eval_babilong_paper_scaffold_checkpoint.py`
+- `metrics/zero_shot_baseline/` or `metrics/no_fewshot_baseline/` — `eval_babilongv2` plain baseline JSON
+- `metrics/scaffold_baselines/` — optional dedicated scaffold-only reruns (`eval_babilong_scaffold_baseline.py`)
+- Top-level `metrics/*.json` — often copies of Neuronic inline ablation runs (`train_babilong_ablation.py`)
+
+Cluster workflow details: `docs/NEURONIC_RUNBOOK.md`.
+
+**Run catalog (each ablation, metrics paths, good vs bad):** `docs/ablations_writeup.md`.
 
 ---
 
@@ -54,7 +107,8 @@ jobs/
   submit_neuronic_optional_sweeps.sh     # Extra width/data/epoch sweeps
   submit_neuronic_seed_replicates.sh     # Seed replicate submitter
 
-writeup.md                 # Project notes, all results, paper framing
+writeup.md                 # Historical notes + early Phase 2 tables
+docs/                      # LaTeX/PDF result tables, NEURONIC_RUNBOOK, ablation plans
 requirements.txt
 ```
 
@@ -93,25 +147,11 @@ this repo. The full generated-answer baseline file is still useful as a
 standard BABILong-style reference, but the approximate first-token file is the
 right comparison for the cache ablations.
 
-There are three BABILong evaluation protocols in this repo:
+The three primary protocols (expanded table above) are:
 
-- **Reasoning-curves no-cache baseline**: the original Falcon-Mamba prompt, with
-  no `[CACHE]` tokens and no StateCache module. This is the clean reported
-  baseline for the base model.
-- **Inline StateCache scaffold eval**: `train_babilong_ablation.py` inserts
-  `[CACHE]` write tokens inside the passage and appends a final `[CACHE]` read
-  token after the question. It then predicts the answer from the logits after
-  that final cache token. The `baseline_acc` in these JSONs is only a
-  scaffold-only sanity check: same inserted `[CACHE]` tokens, but no StateCache
-  delta. It should not be reported as the main no-cache baseline.
-- **Paper-style StateCache scaffold eval**:
-  `eval_babilong_paper_scaffold_checkpoint.py` keeps the reasoning-curves-style
-  BABILong prompt with instructions, few-shot examples, `<context>...</context>`,
-  `QUESTION:`, and `Answer:`, but inserts `[CACHE]` write tokens inside the
-  context and appends `Answer: [CACHE]` as the final StateCache read site. It
-  scores answer candidates from the first next-token logits, making it the
-  closest StateCache evaluation to the original reasoning-curves setup while
-  still giving StateCache explicit intervention sites.
+- **Reasoning-curves no-cache baseline** — `eval_babilongv2.py`: no `[CACHE]` tokens, no StateCache. Use this for **external** comparison to “plain” Falcon-Mamba.
+- **Inline StateCache scaffold eval** — `train_babilong_ablation.py`: `[CACHE]` in passage + read site; **`cache_acc`** vs **`baseline_acc`** (scaffold-only). Same prompt shape for both numbers inside one JSON.
+- **Paper-style StateCache scaffold eval** — `eval_babilong_paper_scaffold_checkpoint.py`: reasoning-curves-style few-shot layout + `[CACHE]`; outputs used in **`metrics/fewshot_babilong/`** and `docs/fewshot_babilong_results_table.*`.
 
 ### 2. Train StateCache / run ablations
 

@@ -505,6 +505,12 @@ def evaluate_architecture(
                         str(sample["question"]),
                         examples_for_prompt,
                     )
+                elif few_shot_count > 0:
+                    prompt = build_babilong_paper_prompt(
+                        str(sample["input"]),
+                        str(sample["question"]),
+                        examples_for_prompt,
+                    )
                 else:
                     prompt = build_babilong_prompt(str(sample["input"]), str(sample["question"]))
                 prompt_payloads.append((eval_index, int(row_index), sample, prompt))
@@ -664,8 +670,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--few-shot-examples",
         type=int,
-        default=2,
-        help="Few-shot 0k examples per task for paper-style BABILong prompts.",
+        default=0,
+        help="Few-shot 0k examples per task for paper-style BABILong prompts (same shape as generative). "
+        "When >0, uses build_babilong_paper_prompt for both next_token and generative. Default 0 for plain prompt.",
     )
     return parser.parse_args()
 

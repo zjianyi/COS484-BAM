@@ -2,13 +2,13 @@
 \centering
 \small
 \setlength{\tabcolsep}{4pt}
-\caption{\textbf{Zero-shot only} (do not compare cells to the few-shot companion table). Falcon-Mamba BABILong ablation results. Accuracy is exact-match (\%) averaged over QA1--QA3 (50 examples per task and length). \emph{No cache, zero-shot:} plain prompt, no \texttt{[CACHE]} (\texttt{eval\_babilongv2}, \texttt{few-shot-examples 0}); reproduced from \texttt{metrics/zero\_shot\_baseline/falcon\_mamba\_next\_token\_qa1\_qa3.json}. \emph{StateCache rows:} \texttt{cache\_acc} from \texttt{metrics/\{run\_id\}.json} (inline scaffold, no few-shot block).}
-\label{tab:babilong-ablation-results}
+\caption{\textbf{Zero-shot + cache-scaffold only} (all prompts include \texttt{[CACHE]}; not the plain \texttt{eval\_babilongv2} baseline). First row: scaffold-only control (\texttt{metrics/scaffold\_baselines/scaffold\_loss\_k4\_layer62.json}, \texttt{baseline\_acc}). Other rows: same \texttt{cache\_acc} values as the StateCache rows in \texttt{ablation\_results\_table.tex} (from \texttt{metrics/\{run\_id\}.json}). QA1--QA3, 50 per cell, inline eval.}
+\label{tab:babilong-cache-scaffold-zero-shot}
 \begin{tabular}{lrrrrrrr}
 \toprule
 \textbf{Method} & \textbf{0k} & \textbf{1k} & \textbf{2k} & \textbf{4k} & \textbf{8k} & \textbf{16k} & \textbf{Avg.} \\
 \midrule
-No cache, zero-shot & 44.7 & 25.3 & 24.7 & 16.7 & 18.7 & 19.3 & 24.9 \\
+Scaffold only, no StateCache ($k{=}4$ loss, L62) & 0.0 & 0.0 & 0.0 & 0.0 & 0.0 & 0.0 & 0.0 \\
 \midrule
 Loss-selected, $k=1$, L62 & 22.7 & 11.3 & 20.0 & 16.0 & 20.0 & 14.7 & 17.4 \\
 Loss-selected, $k=4$, L62 & 16.7 & 18.0 & 15.3 & 12.7 & 14.7 & 14.7 & 15.3 \\

@@ -2,21 +2,26 @@
 \centering
 \small
 \setlength{\tabcolsep}{4pt}
-\caption{Few-shot BABILong ablation results for \texttt{tiiuae/falcon-mamba-7b-instruct}. Accuracy is exact-match accuracy (\%) averaged over QA1--QA3 with 50 examples per task and context length. The no-cache row is imported from the reasoning-curves approximate next-token/prefix baseline; StateCache rows use the few-shot BABILong scaffold with inserted \texttt{[CACHE]} tokens and first-token candidate scoring.}
+\caption{\textbf{Few-shot only} (different prompts and lengths than the zero-shot table---do not mix rows). Falcon-Mamba BABILong ablation results. Accuracy is exact-match (\%) averaged over QA1--QA3 (50 per cell). \emph{No cache, few-shot:} reasoning-curves approximate next-token/prefix baseline, QA1--QA3, stored as \texttt{metrics/fewshot\_babilong/no\_cache\_baseline.json}. \emph{StateCache rows:} \texttt{cache\_acc} from \texttt{metrics/fewshot\_babilong/\{run\_id\}.json} (\texttt{eval\_babilong\_paper\_scaffold\_checkpoint}, paper-style few-shot + \texttt{[CACHE]}).}
 \label{tab:fewshot-babilong-ablation-results}
 \begin{tabular}{lrrrrrrr}
 \toprule
 \textbf{Method} & \textbf{0k} & \textbf{1k} & \textbf{2k} & \textbf{4k} & \textbf{8k} & \textbf{16k} & \textbf{Avg.} \\
 \midrule
-No cache, few-shot & \textbf{52.0} & 36.7 & 28.0 & 24.7 & 5.3 & 0.0 & 24.4 \\
+No cache, few-shot & 52.0 & 36.7 & 28.0 & 24.7 & 5.3 & 0.0 & 24.4 \\
 \midrule
 Loss-selected, $k=1$, L62 & 28.0 & 33.3 & 34.0 & 16.7 & 18.7 & 18.0 & 24.8 \\
 Loss-selected, $k=4$, L62 & 29.3 & 34.7 & 36.7 & 14.7 & 22.7 & 18.7 & 26.1 \\
 Loss-selected, $k=8$, L62 & 27.3 & 40.0 & 37.3 & 18.7 & 17.3 & 20.7 & 26.9 \\
-Loss-selected, $k=4$, L62, train up to 8k & 25.3 & 30.7 & 30.0 & \textbf{34.0} & \textbf{33.3} & 24.0 & 29.6 \\
+Loss-selected, $k=16$, L62 & 28.7 & 33.3 & 34.0 & 12.0 & 20.7 & 14.0 & 23.8 \\
+Loss-selected, $k=32$, L62 & 32.0 & 40.0 & 42.0 & 18.0 & 17.3 & 20.7 & 28.3 \\
+Loss-selected, $k=64$, L62 & 31.3 & 34.0 & 38.7 & 21.3 & 18.7 & 16.7 & 26.8 \\
+Loss-selected, $k=4$, L62, train up to 8k & 25.3 & 30.7 & 30.0 & 34.0 & \textbf{33.3} & 24.0 & 29.6 \\
 Loss-selected, $k=4$, L62, no gate & 32.0 & 36.0 & 37.3 & 20.7 & 18.7 & 24.0 & 28.1 \\
-\textbf{Loss-selected, $k=4$, L32} & 48.7 & \textbf{43.3} & 36.7 & 27.3 & 30.7 & \textbf{26.0} & \textbf{35.4} \\
-Uniform interval, $k=4$, L62 & 31.3 & 31.3 & \textbf{38.7} & 19.3 & 22.0 & 18.0 & 26.8 \\
+Loss-selected, $k=4$, L62, full loss & 27.3 & 18.0 & 15.3 & 15.3 & 15.3 & 16.0 & 17.9 \\
+Loss-selected, $k=4$, L32 & 48.7 & 43.3 & 36.7 & 27.3 & 30.7 & 26.0 & 35.4 \\
+\textbf{Loss-selected, $k=4$, L2} & \textbf{64.7} & \textbf{54.7} & \textbf{51.3} & \textbf{45.3} & 31.3 & \textbf{28.0} & \textbf{45.9} \\
+Uniform interval, $k=4$, L62 & 31.3 & 31.3 & 38.7 & 19.3 & 22.0 & 18.0 & 26.8 \\
 Random, $k=4$, L62 & 27.3 & 21.3 & 21.3 & 18.0 & 22.0 & 13.3 & 20.6 \\
 Regex/entity, L62 & 28.7 & 28.7 & 36.0 & 18.0 & 13.3 & 21.3 & 24.3 \\
 \bottomrule

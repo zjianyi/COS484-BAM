@@ -62,6 +62,8 @@ Remote repo path used in this project:
 cd /u/bw7520/COS484-BAM
 ```
 
+Use this path for `rsync`/`scp` targets and helper scripts. **`~/COS484-BAM` can be wrong** on Neuronic if your home or symlink layout differs from what you expect—prefer **`/u/bw7520/COS484-BAM`**.
+
 Local repo path:
 
 ```bash

@@ -21,3 +21,6 @@ SFT_OpenMath_data/
 # OS / editor
 .DS_Store
 .claude/
+
+# Evaluation outputs (large / machine-local; rsync from Neuronic as needed)
+metrics/

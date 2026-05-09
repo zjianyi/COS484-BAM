@@ -38,6 +38,8 @@ protobuf = ">=4.25.0"
 
 [tasks]
 eval-babilong = "python -m bam.eval_babilongv2"
+# Few-shot paper prompts + HF logits at last position → argmax over candidate answer tokens (saved top_logprobs).
+eval-babilong-fewshot-next-token = "python -m bam.eval_babilongv2 --mamba-model tiiuae/falcon-mamba-7b-instruct --tasks qa1,qa2,qa3 --context-lengths 0k,1k,2k,4k,8k,16k --limit 50 --batch-size 1 --babilong-scoring next_token --few-shot-examples 2 --output metrics/fewshot_babilong/no_cache_baseline_next_token_qa1_qa3.json --cells-output metrics/fewshot_babilong/no_cache_baseline_next_token_qa1_qa3.cells.jsonl"
 train-ablation = "python -m bam.train_babilong_ablation"
 loss-probe = "python -m bam.loss_probe"
 check-falcon-mamba = "python -c \"from transformers.models.falcon_mamba.modeling_falcon_mamba import is_fast_path_available; print(is_fast_path_available())\""

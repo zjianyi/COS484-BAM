@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$(cd "${SCRIPT_DIR}/.." && pwd)"
+
 # Submit optional extra-compute BABILong sweeps as separate Neuronic jobs.
 # Run from the COS484-BAM project root on the login node.
 

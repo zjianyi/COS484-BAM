@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$(cd "${SCRIPT_DIR}/.." && pwd)"
+
 # Submit reviewer-facing seed replicates for the core BABILong claims.
 # Run from the COS484-BAM project root on the login node.
 

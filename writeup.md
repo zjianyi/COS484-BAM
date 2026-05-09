@@ -1,6 +1,14 @@
 # BAM StateCache — Project Notes
 
-**COS484 Final Project, Spring 2025**
+**COS484 Final Project, Spring 2026**
+
+---
+
+## Evaluation protocols and result tables
+
+Numbers from different scripts are **not interchangeable** unless the prompt matches: **`eval_babilongv2`** uses a short plain BABILong string **without** `[CACHE]` tokens; **`train_babilong_ablation`** and **`eval_babilong_paper_scaffold_checkpoint`** insert **`[CACHE]`** and report **`cache_acc`** (module on) vs **`baseline_acc`** (same scaffold, module off — not the same as plain `eval_babilongv2`). Few-shot paper scaffolds add a long prefix, so total length at nominal `16k` differs from zero-shot runs.
+
+**Paper-ready tables:** `docs/ablation_results_table.tex` (plain baseline + `cache_acc`), `docs/ablation_cache_scaffold_zero_shot_table.tex` (scaffold-only baseline + `cache_acc`), `docs/fewshot_babilong_results_table.tex` (few-shot scaffold). PDFs co-located; **`metrics/`** layout and Neuronic workflow: see **`README.md`** (sections *BABILong evaluation protocols* and *Results tables and metrics layout*) and **`docs/NEURONIC_RUNBOOK.md`**.
 
 ---
 
