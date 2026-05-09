@@ -12,6 +12,15 @@ See `writeup.md` for the full project notes and results.
 
 **Requirements:** Python 3.10+, CUDA 12.8, single GPU with ≥40 GB VRAM (tested on H100).
 
+Recommended for Neuronic:
+
+```bash
+pixi install
+pixi run check-falcon-mamba
+```
+
+Fallback without Pixi:
+
 ```bash
 pip install torch==2.7.0+cu128 --index-url https://download.pytorch.org/whl/cu128
 pip install -r requirements.txt
@@ -30,12 +39,20 @@ FalconMamba 7B Instruct requires accepting the model license on HuggingFace firs
 ```
 bam/
   cache.py                 # StateCache module (core architecture)
-  train_babilong.py        # Training: regex-triggered placement (main result)
-  train_babilong_loss.py   # Training: loss-triggered placement (ablation)
-  eval_babilong.py         # Generate-based baseline eval (no cache)
+  train_babilong_ablation.py # Parameterized BABILong cache ablation runner
+  train_babilong.py        # Legacy/reference regex-triggered training script
+  train_babilong_loss.py   # Legacy/reference loss-triggered training script
+  eval_babilongv2.py       # Recommended paper-style BABILong baseline eval
+  eval_babilong.py         # Legacy chat-template generate eval
   loss_probe.py            # Diagnostic: per-token loss on facts vs distractors
   generator.py             # BAMGenerator (autoregressive inference with cache)
   __init__.py
+
+jobs/
+  neuronic_babilong_ablation.sbatch      # Single Neuronic ablation job wrapper
+  submit_neuronic_ablations.sh           # Main ablation batch submitter
+  submit_neuronic_optional_sweeps.sh     # Extra width/data/epoch sweeps
+  submit_neuronic_seed_replicates.sh     # Seed replicate submitter
 
 writeup.md                 # Project notes, all results, paper framing
 requirements.txt
@@ -56,36 +73,68 @@ bam/inspect_model.py       # Model inspection utilities
 
 All scripts are run as Python modules from the project root.
 
-### 1. Generate-based baseline (no cache)
+### 1. Existing BABILong baseline
 
-Evaluates FalconMamba 7B + SFT adapter on BABILong qa1/qa2/qa3 at 0k–4k context using standard generation. This is the comparison baseline for the paper.
+Use the already-completed reasoning-curves FalconMamba no-cache baseline:
 
-```bash
-python -m bam.eval_babilong --tasks qa1 qa2 qa3 --lengths 0k 1k 2k 4k --n_examples 50
-```
+`../reasoning-curves/runs/recall_eval/merged_final/babilong_tinker_llama_nemotron_falcon_mamba_final.json`
 
-### 2. Train StateCache — regex-triggered placement
+It covers `tiiuae/falcon-mamba-7b-instruct`, generative BABILong scoring, `qa1`-`qa10`, `0k`-`16k`, and `limit=50`. No Neuronic baseline rerun is needed unless you want a local reproduction inside this repo.
 
-Inserts `[CACHE]` after entity-movement fact sentences ("X went to Y"). Main result.
+### 2. Train StateCache / run ablations
 
-```bash
-python -m bam.train_babilong > babilong_train.log 2>&1
-```
-
-### 3. Train StateCache — loss-triggered placement
-
-Inserts `[CACHE]` at top-K highest-loss token positions (model's own surprise signal). No task-specific rules — the ablation showing the approach generalizes.
+Use the parameterized ablation runner for new runs. It trains a StateCache checkpoint and then runs inline BABILong eval.
 
 ```bash
-python -m bam.train_babilong_loss > babilong_train_loss.log 2>&1
+python -m bam.train_babilong_ablation \
+  --placement loss \
+  --top-k 4 \
+  --cache-layer-idx -2 \
+  --train-lengths 0k,1k,2k \
+  --eval-lengths 0k,1k,2k,4k,8k,16k \
+  --max-seq-len 16384 \
+  --output checkpoints/cache_babilong_loss_k4_layer62.pt \
+  --metrics-output metrics/loss_k4_layer62.json \
+  > logs/loss_k4_layer62.log 2>&1
 ```
 
-### 4. Loss probe diagnostic
+Common placement policies:
+
+- `--placement regex`: insert `[CACHE]` after entity-movement fact sentences.
+- `--placement loss`: insert `[CACHE]` at top-K highest-loss token positions.
+- `--placement random`: random K-position control.
+- `--placement interval`: evenly spaced K-position control.
+
+### 3. Neuronic cluster jobs
+
+On Neuronic, do not run training on the login node. Submit separate SLURM jobs:
+
+```bash
+mkdir -p logs/neuronic checkpoints metrics
+bash jobs/submit_neuronic_ablations.sh
+```
+
+Optional extra sweeps and seed replicates:
+
+```bash
+bash jobs/submit_neuronic_optional_sweeps.sh
+bash jobs/submit_neuronic_seed_replicates.sh
+```
+
+The Neuronic wrapper stores HF/dataset/Torch caches on `/scratch/$USER` and writes checkpoints/metrics back to `checkpoints/` and `metrics/`.
+
+### 4. Diagnostics
 
 Verifies that entity-movement sentences have higher in-context loss than distractors, validating the loss-triggered placement hypothesis.
 
 ```bash
 python -m bam.loss_probe
+```
+
+The older chat-template baseline remains available as a diagnostic, but should not be the reported BABILong baseline:
+
+```bash
+python -m bam.eval_babilong --tasks qa1 qa2 qa3 --lengths 0k 1k 2k 4k --n_examples 50
 ```
 
 ---
@@ -109,13 +158,18 @@ FalconMamba 7B collapses from 32% → 2% as context grows from 0k to 1k on qa1. 
 
 ## Ablations to run (TODO)
 
-- [ ] **Random placement** — k=4 random positions instead of regex/loss. Tests whether placement matters or just the existence of the cache.
+- [ ] **Baseline** — use the existing reasoning-curves FalconMamba BABILong baseline.
+- [ ] **Placement controls** — regex, loss-triggered, random K=4, and fixed-interval K=4.
 - [ ] **Layer index** — layer 32 vs 62. Formally validates the gradient path argument on BABILong.
 - [ ] **K ablation** — top-1, 4, 8 for loss-triggered. How many cache tokens are needed?
-- [ ] **No gate** — W_gate fixed to 1. Does learned gating contribute?
+- [ ] **Training length** — train through `2k` vs train through `8k`, both evaluated through `16k`.
+- [ ] **Architecture ablations** — no gate, no causal mask, full-loss instead of focused answer loss.
+- [ ] **Capacity and robustness** — `D_ATTN`, `MAX_ENTRIES`, data size, epoch count, and seed replicates.
+
+See `docs/ABLATION_RUN_PLAN.md` for Neuronic job scripts and exact commands.
 
 ---
 
-## GPU setup (Lambda Cloud)
+## Previous GPU setup (Lambda Cloud)
 
 Experiments were run on a Lambda Cloud H100 instance (`lambda-gpu-1xh100`). Model weights and adapter are at `/home/ubuntu/final_project/` on that instance. Checkpoints saved as `bam/cache_babilong.pt` (regex) and `bam/cache_babilong_loss.pt` (loss-triggered).

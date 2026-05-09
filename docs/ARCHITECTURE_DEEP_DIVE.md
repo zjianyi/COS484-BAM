@@ -17,11 +17,18 @@ turning the model into full quadratic attention.
 
 The key design is selective memory:
 
-1. Insert `[CACHE]` tokens only at important positions.
-2. Capture FalconMamba hidden states at those positions.
-3. Project those hidden states into a small key/value memory.
-4. At a later query `[CACHE]` token, retrieve from earlier memory entries.
-5. Add the retrieved information as a residual delta into the hidden state.
+1. Insert identical `[CACHE]` tokens at selected positions: after important
+   passage facts, and once after the question immediately before the answer
+   token during training.
+2. Run FalconMamba up to the cache layer and capture the hidden state at every
+   `[CACHE]` position.
+3. For every captured cache hidden state, compute both a key/value pair with
+   `W_K`/`W_V` and a query vector with `W_Q`.
+4. At the cache layer, compute attention scores `Q @ K.T / sqrt(d_attn)` across
+   the cache positions, then apply a strict causal mask so each `[CACHE]` token
+   can attend only to earlier `[CACHE]` tokens.
+5. Add the retrieved value mixture as a gated residual delta at cache positions
+   that have earlier cache positions available.
 6. Continue through the remaining frozen FalconMamba layers.
 
 The base model is frozen. Only the small StateCache module is trained.
