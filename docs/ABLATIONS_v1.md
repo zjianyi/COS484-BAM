@@ -28,15 +28,11 @@ PyTorch CUDA index, make sure you have the latest `pixi.toml`. It sets
 `index-strategy = "unsafe-best-match"` so normal packages resolve from PyPI
 while PyTorch resolves from `https://download.pytorch.org/whl/cu128`.
 
-If `causal-conv1d` tries to build against a different Torch/CUDA combo, make
-sure the latest `pixi.toml` includes:
+If `causal-conv1d` tries to build from source against CUDA 13.1, make sure the
+latest `pixi.toml` is present. It installs prebuilt GitHub wheels directly for:
 
-```toml
-no-build-isolation = ["causal-conv1d", "mamba-ssm"]
-```
-
-This forces those packages to use the pinned project Torch instead of pulling a
-new Torch inside an isolated build environment.
+- `causal-conv1d` for Python 3.10, CUDA 12, Torch 2.7, Linux x86_64.
+- `mamba-ssm` for Python 3.10, CUDA 12, Torch 2.7, Linux x86_64.
 
 ```bash
 cd "$HOME/COS484-BAM"

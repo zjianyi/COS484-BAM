@@ -29,8 +29,8 @@ peft = ">=0.13.0"
 accelerate = ">=1.0.0"
 datasets = ">=3.0.0"
 trl = ">=0.11.0"
-mamba-ssm = ">=2.2.2"
-causal-conv1d = ">=1.4.0"
+mamba-ssm = { url = "https://github.com/state-spaces/mamba/releases/download/v2.3.1/mamba_ssm-2.3.1%2Bcu12torch2.7cxx11abiTRUE-cp310-cp310-linux_x86_64.whl" }
+causal-conv1d = { url = "https://github.com/Dao-AILab/causal-conv1d/releases/download/v1.6.1.post4/causal_conv1d-1.6.1%2Bcu12torch2.7cxx11abiTRUE-cp310-cp310-linux_x86_64.whl" }
 python-dotenv = ">=1.0.0"
 numpy = ">=1.26.0"
 sentencepiece = ">=0.2.0"
