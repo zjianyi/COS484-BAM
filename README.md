@@ -75,11 +75,23 @@ All scripts are run as Python modules from the project root.
 
 ### 1. Existing BABILong baseline
 
-Use the already-completed reasoning-curves FalconMamba no-cache baseline:
+Use the already-completed reasoning-curves FalconMamba no-cache baseline with
+approximate first-token scoring:
 
 `../reasoning-curves/runs/recall_eval/merged_final/babilong_tinker_llama_nemotron_falcon_mamba_final.json`
 
-It covers `tiiuae/falcon-mamba-7b-instruct`, generative BABILong scoring, `qa1`-`qa10`, `0k`-`16k`, and `limit=50`. No Neuronic baseline rerun is needed unless you want a local reproduction inside this repo.
+For comparing against StateCache, use:
+
+`../reasoning-curves/runs/recall_eval/merged_final/babilong_approx_next_token_prefix_eval.json`
+
+This file evaluates saved greedy generations by their first generated
+token/prefix, which is the closest baseline to the StateCache eval's
+`argmax(logits[-1])` next-token decision. It covers
+`tiiuae/falcon-mamba-7b-instruct`, `qa1`-`qa10`, `0k`-`16k`, and `limit=50`.
+No Neuronic baseline rerun is needed unless you want a local reproduction inside
+this repo. The full generated-answer baseline file is still useful as a
+standard BABILong-style reference, but the approximate first-token file is the
+right comparison for the cache ablations.
 
 ### 2. Train StateCache / run ablations
 
