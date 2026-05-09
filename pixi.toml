@@ -11,13 +11,19 @@ cuda = "12.8"
 [dependencies]
 python = "3.10.*"
 pip = "*"
+ninja = "*"
+packaging = "*"
+setuptools = "*"
+wheel = "*"
 
 [pypi-options]
+index-url = "https://pypi.org/simple"
 extra-index-urls = ["https://download.pytorch.org/whl/cu128"]
+index-strategy = "unsafe-best-match"
 
 [pypi-dependencies]
 torch = "==2.7.0+cu128"
-transformers = ">=5.0.0"
+transformers = ">=4.48.0,<5"
 peft = ">=0.13.0"
 accelerate = ">=1.0.0"
 datasets = ">=3.0.0"

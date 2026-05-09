@@ -23,6 +23,11 @@ in terms of installed GPU packages, but it is more reproducible than hand-made
 conda/venv environments. It creates a Python 3.10 Linux environment and installs
 the CUDA 12.8 PyTorch wheel plus `causal-conv1d` and `mamba-ssm`.
 
+If `pixi install` fails with a `requests`/`datasets` conflict involving the
+PyTorch CUDA index, make sure you have the latest `pixi.toml`. It sets
+`index-strategy = "unsafe-best-match"` so normal packages resolve from PyPI
+while PyTorch resolves from `https://download.pytorch.org/whl/cu128`.
+
 ```bash
 cd "$HOME/COS484-BAM"
 mkdir -p logs/neuronic checkpoints metrics
