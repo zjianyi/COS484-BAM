@@ -49,7 +49,10 @@ echo "project_dir=$PROJECT_DIR"
 echo "scratch_dir=/scratch/$USER/bam_runs/$SLURM_JOB_ID"
 nvidia-smi || true
 
-"${PYTHON_CMD[@]}" -m bam.train_babilong_ablation "$@" \
+"${PYTHON_CMD[@]}" -m bam.train_babilong_ablation \
+  --run-id "$RUN_ID" \
+  --cells-output "metrics/${RUN_ID}.cells.jsonl" \
+  "$@" \
   > "logs/neuronic/${RUN_ID}_${SLURM_JOB_ID}.log" 2>&1
 
 rm -rf "/scratch/$USER/bam_runs/$SLURM_JOB_ID"

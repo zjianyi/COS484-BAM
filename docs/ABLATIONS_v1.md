@@ -165,9 +165,12 @@ Each job writes:
 ```text
 checkpoints/<run_id>.pt
 metrics/<run_id>.json
+metrics/<run_id>.cells.jsonl
 logs/neuronic/<run_id>_<jobid>.log
 logs/neuronic/bam-ablation-<jobid>.out
 ```
 
-Use the `metrics/*.json` files for tables. They include config, runtime,
-cache-count statistics, and per-task/per-length eval metrics.
+Use the `metrics/*.json` files for run summaries. Use
+`metrics/*.cells.jsonl` for reasoning-curves-style per-task/per-length cells;
+each line includes aggregate metrics plus per-example predictions for one
+`(task, context_length)` cell.

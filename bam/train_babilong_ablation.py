@@ -421,10 +421,16 @@ def run_inline_eval(
 
     results: dict[tuple[str, str], tuple[int, int]] = {}
     baseline_results: dict[tuple[str, str], tuple[int, int]] = {}
+    cells_output_path = Path(args.cells_output) if args.cells_output else None
+    if cells_output_path is not None:
+        cells_output_path.parent.mkdir(parents=True, exist_ok=True)
+        if cells_output_path.exists():
+            cells_output_path.unlink()
 
     for (task, length), rows in eval_split.items():
         cache_correct = 0
         baseline_correct = 0
+        examples: list[dict[str, Any]] = []
         for row_index, row in enumerate(rows):
             passage_ids = get_passage_ids(tokenizer, row, args.max_seq_len - margin)
             positions = select_cache_positions(
@@ -475,7 +481,8 @@ def run_inline_eval(
                 [logits[0, -1, :].argmax(dim=-1).item()],
                 skip_special_tokens=True,
             )
-            if pred_matches(tokenizer, pred, str(row["target"])):
+            cache_ok = pred_matches(tokenizer, pred, str(row["target"]))
+            if cache_ok:
                 cache_correct += 1
 
             with torch.no_grad():
@@ -484,11 +491,59 @@ def run_inline_eval(
                 [out.logits[0, -1, :].argmax(dim=-1).item()],
                 skip_special_tokens=True,
             )
-            if pred_matches(tokenizer, pred_b, str(row["target"])):
+            baseline_ok = pred_matches(tokenizer, pred_b, str(row["target"]))
+            if baseline_ok:
                 baseline_correct += 1
+
+            examples.append(
+                {
+                    "row_index": row_index,
+                    "task": task,
+                    "context_length": length,
+                    "question": str(row["question"]),
+                    "gold": str(row["target"]),
+                    "cache_pred": pred.strip(),
+                    "cache_correct": cache_ok,
+                    "baseline_pred": pred_b.strip(),
+                    "baseline_correct": baseline_ok,
+                    "passage_tokens": int(len(passage_ids)),
+                    "input_tokens": int(input_ids.shape[1]),
+                    "cache_positions": positions,
+                    "num_cache_positions": len(positions),
+                }
+            )
 
         results[(task, length)] = (cache_correct, len(rows))
         baseline_results[(task, length)] = (baseline_correct, len(rows))
+        if cells_output_path is not None:
+            cell = {
+                "run_id": args.run_id,
+                "placement": args.placement,
+                "top_k": args.top_k,
+                "cache_layer_idx": layer_idx,
+                "gate": args.gate,
+                "causal_mask": args.causal_mask,
+                "loss_mode": args.loss_mode,
+                "train_lengths": parse_csv(args.train_lengths),
+                "eval_lengths": parse_csv(args.eval_lengths),
+                "task": task,
+                "context_length": length,
+                "cache_correct": cache_correct,
+                "baseline_correct": baseline_correct,
+                "total": len(rows),
+                "cache_acc": cache_correct / max(1, len(rows)),
+                "baseline_acc": baseline_correct / max(1, len(rows)),
+                "mean_input_tokens": (
+                    sum(example["input_tokens"] for example in examples) / max(1, len(examples))
+                ),
+                "mean_cache_positions": (
+                    sum(example["num_cache_positions"] for example in examples)
+                    / max(1, len(examples))
+                ),
+                "examples": examples,
+            }
+            with cells_output_path.open("a") as cells_file:
+                cells_file.write(json.dumps(cell) + "\n")
 
     print(f"\n=== BABILong Cache Eval ({args.placement}) ===")
     eval_tasks = parse_csv(args.eval_tasks)
@@ -523,8 +578,10 @@ def run_inline_eval(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run BABILong StateCache ablations.")
     parser.add_argument("--model-name", default=DEFAULT_MODEL_NAME)
+    parser.add_argument("--run-id", default=None)
     parser.add_argument("--output", required=True)
     parser.add_argument("--metrics-output", default=None)
+    parser.add_argument("--cells-output", default=None)
     parser.add_argument("--placement", choices=("regex", "loss", "random", "interval"), default="loss")
     parser.add_argument("--top-k", type=int, default=4)
     parser.add_argument(
@@ -562,6 +619,8 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    if args.run_id is None:
+        args.run_id = Path(args.output).stem
     set_seed(args.seed)
     t_start = time.time()
     hf_token = _load_token()
@@ -805,6 +864,7 @@ def main() -> None:
     metrics_payload = {
         "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "output": str(out_path),
+        "cells_output": args.cells_output,
         "total_seconds": total_sec,
         "mean_passage_cache": mean_cache,
         "min_passage_cache": min(cache_counts, default=0),
