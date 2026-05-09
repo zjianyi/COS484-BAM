@@ -20,6 +20,7 @@ wheel = "*"
 index-url = "https://pypi.org/simple"
 extra-index-urls = ["https://download.pytorch.org/whl/cu128"]
 index-strategy = "unsafe-best-match"
+no-build-isolation = ["causal-conv1d", "mamba-ssm"]
 
 [pypi-dependencies]
 torch = "==2.7.0+cu128"

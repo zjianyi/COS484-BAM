@@ -28,10 +28,21 @@ PyTorch CUDA index, make sure you have the latest `pixi.toml`. It sets
 `index-strategy = "unsafe-best-match"` so normal packages resolve from PyPI
 while PyTorch resolves from `https://download.pytorch.org/whl/cu128`.
 
+If `causal-conv1d` tries to build against a different Torch/CUDA combo, make
+sure the latest `pixi.toml` includes:
+
+```toml
+no-build-isolation = ["causal-conv1d", "mamba-ssm"]
+```
+
+This forces those packages to use the pinned project Torch instead of pulling a
+new Torch inside an isolated build environment.
+
 ```bash
 cd "$HOME/COS484-BAM"
 mkdir -p logs/neuronic checkpoints metrics
 
+rm -rf .pixi pixi.lock
 pixi install
 ```
 
