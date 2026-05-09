@@ -93,6 +93,26 @@ this repo. The full generated-answer baseline file is still useful as a
 standard BABILong-style reference, but the approximate first-token file is the
 right comparison for the cache ablations.
 
+There are three BABILong evaluation protocols in this repo:
+
+- **Reasoning-curves no-cache baseline**: the original Falcon-Mamba prompt, with
+  no `[CACHE]` tokens and no StateCache module. This is the clean reported
+  baseline for the base model.
+- **Inline StateCache scaffold eval**: `train_babilong_ablation.py` inserts
+  `[CACHE]` write tokens inside the passage and appends a final `[CACHE]` read
+  token after the question. It then predicts the answer from the logits after
+  that final cache token. The `baseline_acc` in these JSONs is only a
+  scaffold-only sanity check: same inserted `[CACHE]` tokens, but no StateCache
+  delta. It should not be reported as the main no-cache baseline.
+- **Paper-style StateCache scaffold eval**:
+  `eval_babilong_paper_scaffold_checkpoint.py` keeps the reasoning-curves-style
+  BABILong prompt with instructions, few-shot examples, `<context>...</context>`,
+  `QUESTION:`, and `Answer:`, but inserts `[CACHE]` write tokens inside the
+  context and appends `Answer: [CACHE]` as the final StateCache read site. It
+  scores answer candidates from the first next-token logits, making it the
+  closest StateCache evaluation to the original reasoning-curves setup while
+  still giving StateCache explicit intervention sites.
+
 ### 2. Train StateCache / run ablations
 
 Use the parameterized ablation runner for new runs. It trains a StateCache checkpoint and then runs inline BABILong eval.
@@ -116,6 +136,31 @@ Common placement policies:
 - `--placement loss`: insert `[CACHE]` at top-K highest-loss token positions.
 - `--placement random`: random K-position control.
 - `--placement interval`: evenly spaced K-position control.
+
+To evaluate an existing checkpoint on additional BABILong tasks without
+retraining, use:
+
+```bash
+python -m bam.eval_babilong_ablation_checkpoint \
+  --checkpoint checkpoints/cache_babilong_loss_k4_layer62.pt \
+  --metrics-output metrics/loss_k4_layer62.json \
+  --append-metrics \
+  --eval-tasks qa4,qa5,qa6,qa7,qa8,qa9,qa10 \
+  --eval-lengths 0k,1k,2k,4k,8k,16k \
+  --n-eval 50
+```
+
+To evaluate the same checkpoint with the more comparable paper-style scaffold:
+
+```bash
+python -m bam.eval_babilong_paper_scaffold_checkpoint \
+  --checkpoint checkpoints/cache_babilong_loss_k4_layer62.pt \
+  --metrics-output metrics/paper_scaffold/loss_k4_layer62.json \
+  --cells-output metrics/paper_scaffold/loss_k4_layer62.cells.jsonl \
+  --eval-tasks qa1,qa2,qa3 \
+  --eval-lengths 0k,1k,2k,4k,8k,16k \
+  --n-eval 50
+```
 
 ### 3. Neuronic cluster jobs
 
