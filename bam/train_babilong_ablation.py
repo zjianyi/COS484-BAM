@@ -288,9 +288,10 @@ def cache_delta(
 ) -> tuple[torch.Tensor, torch.Tensor]:
     cache_dtype = cache.W_K.weight.dtype
     cache_src = h[0, cache_pos].detach().to(cache_dtype)
-    K = cache.W_K(cache_src)
-    V = cache.W_V(cache_src)
-    Q = cache.W_Q(h[0, cache_pos].to(cache_dtype))
+    routed_src = cache.route(cache_src)
+    K = cache.W_K(routed_src)
+    V = cache.W_V(routed_src)
+    Q = cache.W_Q(cache.route(h[0, cache_pos].to(cache_dtype)))
 
     n_cache = cache_pos.numel()
     if causal_mask:
@@ -595,6 +596,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--causal-mask", choices=("on", "off"), default="on")
     parser.add_argument("--loss-mode", choices=("focused", "full"), default="focused")
     parser.add_argument("--d-attn", type=int, default=256)
+    parser.add_argument("--route-gate", choices=("off", "scalar", "vector"), default="off")
     parser.add_argument("--max-entries", type=int, default=64)
     parser.add_argument("--train-tasks", default="qa1,qa2,qa3")
     parser.add_argument("--train-lengths", default="0k,1k,2k")
@@ -677,6 +679,7 @@ def main() -> None:
         d_model=hidden_size,
         d_attn=args.d_attn,
         max_entries=args.max_entries,
+        route_gate=args.route_gate,
     ).to(device=device)
     cache.train()
     for param in cache.parameters():
@@ -746,6 +749,7 @@ def main() -> None:
     optimizer.zero_grad(set_to_none=True)
     total_loss_sum = 0.0
     total_examples = 0
+    train_history: list[dict[str, float | int]] = []
 
     for epoch in range(args.epochs):
         order = list(range(len(precomputed)))
@@ -820,6 +824,15 @@ def main() -> None:
             f"avg_loss={epoch_avg:.4f} W_out_norm={w_out_norm:.4f}",
             flush=True,
         )
+        train_history.append(
+            {
+                "epoch": epoch,
+                "examples": epoch_count,
+                "avg_loss": epoch_avg,
+                "w_out_norm": w_out_norm,
+                "opt_step": opt_step,
+            }
+        )
         if args.save_epoch_checkpoints:
             ckpt_path = Path(args.output).with_suffix(f".ep{epoch}.pt")
             ckpt_path.parent.mkdir(parents=True, exist_ok=True)
@@ -870,6 +883,7 @@ def main() -> None:
         "min_passage_cache": min(cache_counts, default=0),
         "max_passage_cache": max(cache_counts, default=0),
         "config": checkpoint_config(args, hidden_size, layer_idx),
+        "train_history": train_history,
         "eval": eval_metrics,
     }
     metrics_path = Path(args.metrics_output) if args.metrics_output else out_path.with_suffix(".metrics.json")
@@ -883,6 +897,7 @@ def checkpoint_config(args: argparse.Namespace, hidden_size: int, layer_idx: int
     return {
         "d_model": hidden_size,
         "d_attn": args.d_attn,
+        "route_gate": args.route_gate,
         "max_entries": args.max_entries,
         "cache_layer_idx": layer_idx,
         "placement": args.placement,

@@ -36,11 +36,16 @@ These establish baselines or diagnostics; they do **not** produce a `.pt` checkp
 - **Purpose:** Fair comparison of Falcon-Mamba without intervention; row **“No cache, zero-shot”** in `ablation_results_table` (~**24.9%** avg in our table).
 - **Why it isn’t “bad”:** This is the intended external baseline; numbers are middling because BABILong is hard and scoring is exact-match next-token.
 
-### Few-shot no-cache (reasoning-curves import)
+### Few-shot no-cache (legacy reasoning-curves import)
 
-- **Source:** Approximate next-token / prefix scoring from **`reasoning-curves`** merged eval (imported into **`metrics/fewshot_babilong/no_cache_baseline.json`**).
+- **Source:** **`metrics/fewshot_babilong/no_cache_baseline.json`** (see also **`no_cache_baseline_legacy_reasoning_curves_approx.json`**), imported from approximate prefix-on-generation rescoring.
 - **Prompt:** Paper-style few-shot BABILong — **no `[CACHE]`**, **with** few-shot block.
-- **Row:** “No cache, few-shot” (~**24.4%** avg); strong at **0k**, **bad tail at 8k–16k** because total prompt length explodes (prefix + long passage).
+- **Row:** “No cache, few-shot” in **`fewshot_babilong_results_table`** (~**24.4%** avg in the current LaTeX table); strong at **0k**, bad tail at **8k--16k** because total prompt length grows with prefix + passage.
+
+### Few-shot no-cache (`eval_babilongv2`, candidate scoring — diagnostic)
+
+- **Source:** **`metrics/fewshot_babilong/no_cache_baseline_next_token_qa1_qa3.json`** — `eval_babilongv2` with paper few-shot prompts (`--few-shot-examples 2`), **candidate answer-token** scoring (`--babilong-scoring next_token`).
+- **Status:** Useful diagnostic, but **not** the current “No cache, few-shot” LaTeX row. Do not mix this candidate-logit baseline with the legacy few-shot table unless the table is regenerated consistently.
 
 ### Scaffold-only baseline (`eval_babilong_scaffold_baseline`)
 
@@ -82,13 +87,18 @@ Each row is one trained checkpoint + inline eval (`train_babilong_ablation`) and
 | `random_k4_layer62` | Random positions | 17.9 | 20.6 | **Weak FS** — placement matters; random is a tough control. |
 | `regex_layer62` | Regex after entity-movement facts | 18.4 | 24.3 | **Domain-informed** — competitive but needs BABILong-specific rules; loss-triggered aims for generality. |
 
+The new **uniform interval L2** run is listed in the layer table below, because its main conclusion is about injection depth rather than placement at the default L62 hook.
+
 ### Layer index (\(k{=}4\), loss, L62 unless noted)
 
 | Run ID | Layer | ZS avg | FS avg | Interpretation |
 |--------|-------|--------|--------|----------------|
-| `loss_k4_layer2` | **L2** | **44.1** | **45.9** | **Best overall** in both tables. Early injection gives StateCache **many** downstream Mamba layers to transform representations before the answer head — aligns with “short gradient path from supervision” intuition inverted: **early edit propagates**. (Also: verify layer index semantics match intended depth in code.) |
+| `loss_k4_layer2` | **L2** | 44.1 | **45.9** | **Best among rows with few-shot eval** and still near the zero-shot top. Early injection gives StateCache **many** downstream Mamba layers to transform representations before the answer head. (Also: verify layer index semantics match intended depth in code.) |
+| `loss_k4_layer6` | **L6** | **47.9** | n/a | **Best zero-shot row in the current table.** Strength is broad across 0k--8k and remains highest at 16k among the layer sweep, suggesting very-early-but-not-input-adjacent injection is a strong operating point. |
+| `loss_k4_layer16` | L16 | 42.1 | n/a | **Strong early/mid injection.** Lower than L2/L6 but far above L62, reinforcing that the late default hook is not accuracy-optimal here. |
 | `loss_k4_layer32` | L32 | 33.8 | 35.4 | **Strong mid** — mid-layer works better than L62 for raw accuracy in our sweep. |
 | `loss_k4_layer62` | L62 (default) | 15.3 | 26.1 | **Training default** for backward-path story — but **empirically weaker** than early layers here for **accuracy**, suggesting the original “late layer only” hypothesis is **not what maximizes BABILong cache_acc** under this setup. |
+| `interval_k4_layer2` | L2, uniform | 42.1 | n/a | **Strong content-agnostic early-layer control.** Uniform spacing at L2 is close to loss-selected L16 and only modestly below loss-selected L2, so injection depth can dominate placement policy in zero-shot accuracy. |
 
 ### Architecture / training variants (\(k{=}4\), L62)
 
@@ -106,7 +116,7 @@ Each row is one trained checkpoint + inline eval (`train_babilong_ablation`) and
 
 2. **Why scaffold-only ~0%.** Not broken — the backbone sees **[CACHE]** tokens without learned correction; exact-match collapses.
 
-3. **Why L2 (and L32) beat L62 on accuracy.** Empirically, **early** injection wins under this protocol — likely **representation rewrite bandwidth** over depth; late-layer hook may be better for **gradient structure during training** but not for **held-out cache_acc**.
+3. **Why early layers beat L62 on accuracy.** Empirically, **early** injection wins under this protocol: L6 is the current zero-shot leader, L2 is best among rows with few-shot eval, and L16/L32 also clear L62. Likely explanation: more downstream layers can transform the injected residual into answer-useful representations; late-layer hooks may be attractive for gradient locality but are not accuracy-optimal here.
 
 4. **Full loss bad.** Supervision spreads across filler tokens; cache does not specialize on answer-critical behavior.
 

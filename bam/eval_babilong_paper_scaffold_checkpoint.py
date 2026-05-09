@@ -63,6 +63,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--regex-cap-k", type=int, default=None)
     parser.add_argument("--cache-layer-idx", type=int, default=None)
     parser.add_argument("--gate", choices=("on", "off"), default=None)
+    parser.add_argument("--route-gate", choices=("off", "scalar", "vector"), default=None)
     parser.add_argument("--causal-mask", choices=("on", "off"), default=None)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device-map", default="cuda")
@@ -227,6 +228,7 @@ def main() -> None:
     args.regex_cap_k = cfg_value(args, cfg, "regex_cap_k", None)
     args.cache_layer_idx = int(cfg_value(args, cfg, "cache_layer_idx", -2))
     args.gate = cfg_value(args, cfg, "gate", "on")
+    args.route_gate = cfg_value(args, cfg, "route_gate", "off")
     args.causal_mask = cfg_value(args, cfg, "causal_mask", "on")
     args.max_seq_len = int(cfg_value(args, cfg, "max_seq_len", 16384)) if args.max_seq_len is None else args.max_seq_len
 
@@ -260,6 +262,7 @@ def main() -> None:
         d_model=int(cfg["d_model"]),
         d_attn=int(cfg["d_attn"]),
         max_entries=int(cfg["max_entries"]),
+        route_gate=args.route_gate,
     ).to(device=device)
     cache.load_state_dict(ckpt["state_dict"])
     cache.eval()

@@ -23,15 +23,30 @@ import torch.nn.functional as F
 
 
 class StateCache(nn.Module):
-    def __init__(self, d_model: int = 4096, d_attn: int = 256, max_entries: int = 32):
+    def __init__(
+        self,
+        d_model: int = 4096,
+        d_attn: int = 256,
+        max_entries: int = 32,
+        route_gate: str = "off",
+    ):
         super().__init__()
+        if route_gate not in {"off", "scalar", "vector"}:
+            raise ValueError(f"route_gate must be off, scalar, or vector; got {route_gate!r}")
         self.d_model = d_model
         self.d_attn = d_attn
         self.max_entries = max_entries
+        self.route_gate = route_gate
 
         self.W_Q = nn.Linear(d_model, d_attn, bias=False)
         self.W_K = nn.Linear(d_model, d_attn, bias=False)
         self.W_V = nn.Linear(d_model, d_attn, bias=False)
+        if route_gate == "scalar":
+            self.W_route_gate = nn.Linear(d_model, 1, bias=False)
+            nn.init.zeros_(self.W_route_gate.weight)
+        elif route_gate == "vector":
+            self.W_route_gate = nn.Linear(d_model, d_model, bias=False)
+            nn.init.zeros_(self.W_route_gate.weight)
         self.W_out = nn.Linear(d_attn, d_model, bias=False)
         nn.init.zeros_(self.W_out.weight)
         # Gate controls how much of the delta to apply; zero-init → sigmoid(0)=0.5 at start.
@@ -54,13 +69,25 @@ class StateCache(nn.Module):
             return x.squeeze(0)
         raise ValueError(f"StateCache expected a single vector, got shape {tuple(x.shape)}")
 
+    def route(self, h: torch.Tensor) -> torch.Tensor:
+        """Optionally gate hidden states before Q/K/V projection.
+
+        The multiplier is identity-initialized: zero route-gate weights produce
+        ``2 * sigmoid(0) == 1``, so the ablation starts equivalent to no route
+        gate and learns deviations during training.
+        """
+        if self.route_gate == "off":
+            return h
+        return h * (2.0 * torch.sigmoid(self.W_route_gate(h)))
+
     @torch.no_grad()
     def write(self, h: torch.Tensor) -> None:
         """Append a single (key, value) pair derived from hidden state `h`."""
         h_vec = self._ensure_1d(h.detach())
         w_dtype = self.W_K.weight.dtype
-        k = self.W_K(h_vec.to(w_dtype))
-        v = self.W_V(h_vec.to(w_dtype))
+        routed = self.route(h_vec.to(w_dtype))
+        k = self.W_K(routed)
+        v = self.W_V(routed)
         self.keys.append(k)
         self.values.append(v)
         if len(self.keys) > self.max_entries:
@@ -78,7 +105,7 @@ class StateCache(nn.Module):
             return h_vec
 
         w_dtype = self.W_Q.weight.dtype
-        q = self.W_Q(h_vec.to(w_dtype))
+        q = self.W_Q(self.route(h_vec.to(w_dtype)))
         keys = torch.stack(self.keys, dim=0)
         values = torch.stack(self.values, dim=0)
 

@@ -49,6 +49,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--regex-cap-k", type=int, default=None)
     parser.add_argument("--cache-layer-idx", type=int, default=None)
     parser.add_argument("--gate", choices=("on", "off"), default=None)
+    parser.add_argument("--route-gate", choices=("off", "scalar", "vector"), default=None)
     parser.add_argument("--causal-mask", choices=("on", "off"), default=None)
     parser.add_argument("--loss-mode", choices=("focused", "full"), default=None)
     parser.add_argument("--train-lengths", default=None)
@@ -84,6 +85,7 @@ def main() -> None:
     args.regex_cap_k = cfg_value(args, cfg, "regex_cap_k", None)
     args.cache_layer_idx = int(cfg_value(args, cfg, "cache_layer_idx", -2))
     args.gate = cfg_value(args, cfg, "gate", "on")
+    args.route_gate = cfg_value(args, cfg, "route_gate", "off")
     args.causal_mask = cfg_value(args, cfg, "causal_mask", "on")
     args.loss_mode = cfg_value(args, cfg, "loss_mode", "focused")
     args.train_lengths = ",".join(cfg.get("train_lengths", ["0k", "1k", "2k"])) if args.train_lengths is None else args.train_lengths
@@ -119,6 +121,7 @@ def main() -> None:
         d_model=int(cfg["d_model"]),
         d_attn=int(cfg["d_attn"]),
         max_entries=int(cfg["max_entries"]),
+        route_gate=args.route_gate,
     ).to(device=device)
     cache.load_state_dict(ckpt["state_dict"])
     cache.eval()

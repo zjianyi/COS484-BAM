@@ -47,9 +47,10 @@ echo "job_id=$SLURM_JOB_ID"
 echo "node=$(hostname)"
 echo "project_dir=$PROJECT_DIR"
 echo "scratch_dir=/scratch/$USER/bam_runs/$SLURM_JOB_ID"
+echo "train_module=${BAM_TRAIN_MODULE:-bam.train_babilong_ablation}"
 nvidia-smi || true
 
-"${PYTHON_CMD[@]}" -m bam.train_babilong_ablation \
+"${PYTHON_CMD[@]}" -m "${BAM_TRAIN_MODULE:-bam.train_babilong_ablation}" \
   --run-id "$RUN_ID" \
   --cells-output "metrics/${RUN_ID}.cells.jsonl" \
   "$@" \
