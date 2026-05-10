@@ -1,0 +1,46 @@
+\documentclass[10pt]{article}
+\usepackage[paperwidth=560bp,paperheight=350bp,margin=0bp]{geometry}
+\usepackage{tikz}
+\usepackage{helvet}
+\renewcommand{\familydefault}{\sfdefault}
+\pagestyle{empty}
+\begin{document}
+\noindent\begin{tikzpicture}[x=1bp,y=1bp]
+\fill[white] (0,0) rectangle (560,350);
+\draw[gray!18,line width=0.5bp] (70.00,56.00) -- (538.00,56.00);
+\node[anchor=east,font=\scriptsize] at (62.00,56.00) {$10^{-4}$};
+\draw[gray!18,line width=0.5bp] (70.00,110.00) -- (538.00,110.00);
+\node[anchor=east,font=\scriptsize] at (62.00,110.00) {$10^{-3}$};
+\draw[gray!18,line width=0.5bp] (70.00,164.00) -- (538.00,164.00);
+\node[anchor=east,font=\scriptsize] at (62.00,164.00) {$10^{-2}$};
+\draw[gray!18,line width=0.5bp] (70.00,218.00) -- (538.00,218.00);
+\node[anchor=east,font=\scriptsize] at (62.00,218.00) {$10^{-1}$};
+\draw[gray!18,line width=0.5bp] (70.00,272.00) -- (538.00,272.00);
+\node[anchor=east,font=\scriptsize] at (62.00,272.00) {$10^{0}$};
+\draw[gray!18,line width=0.5bp] (70.00,326.00) -- (538.00,326.00);
+\node[anchor=east,font=\scriptsize] at (62.00,326.00) {$10$};
+\draw[black,line width=0.6bp] (70.00,56.00) -- (70.00,51.00);
+\node[anchor=north,font=\scriptsize] at (70.00,46.00) {0};
+\draw[black,line width=0.6bp] (193.16,56.00) -- (193.16,51.00);
+\node[anchor=north,font=\scriptsize] at (193.16,46.00) {5};
+\draw[black,line width=0.6bp] (316.32,56.00) -- (316.32,51.00);
+\node[anchor=north,font=\scriptsize] at (316.32,46.00) {10};
+\draw[black,line width=0.6bp] (439.47,56.00) -- (439.47,51.00);
+\node[anchor=north,font=\scriptsize] at (439.47,46.00) {15};
+\draw[black,line width=0.6bp] (538.00,56.00) -- (538.00,51.00);
+\node[anchor=north,font=\scriptsize] at (538.00,46.00) {19};
+\draw[black,line width=0.8bp] (70.00,56.00) -- (538.00,56.00);
+\draw[black,line width=0.8bp] (70.00,56.00) -- (70.00,326.00);
+\draw[blue!65!black,line width=1.6bp,line join=round,line cap=round] (70.00bp,311.48bp) -- (94.63bp,277.56bp) -- (119.26bp,272.34bp) -- (143.89bp,267.50bp) -- (168.53bp,258.40bp) -- (193.16bp,253.44bp) -- (217.79bp,243.87bp) -- (242.42bp,236.41bp) -- (267.05bp,207.20bp) -- (291.68bp,217.72bp) -- (316.32bp,168.08bp) -- (340.95bp,112.24bp) -- (365.58bp,72.26bp) -- (390.21bp,56.00bp) -- (414.84bp,56.00bp) -- (439.47bp,56.00bp) -- (464.11bp,56.00bp) -- (488.74bp,56.00bp) -- (513.37bp,56.00bp) -- (538.00bp,56.00bp);
+\fill[blue!65!black] (70.00,311.48) circle (2bp);
+\fill[blue!65!black] (94.63,277.56) circle (2bp);
+\fill[blue!65!black] (119.26,272.34) circle (2bp);
+\fill[blue!65!black] (193.16,253.44) circle (2bp);
+\fill[blue!65!black] (316.32,168.08) circle (2bp);
+\fill[blue!65!black] (439.47,56.00) circle (2bp);
+\fill[blue!65!black] (538.00,56.00) circle (2bp);
+\node[font=\small] at (304.00,16) {Epoch};
+\node[rotate=90,font=\small] at (18,191.00) {Training cross-entropy loss};
+\node[anchor=west,font=\scriptsize,text=black!70] at (70.00,332) {Loss-selected StateCache, $k=4$, L6};
+\end{tikzpicture}%
+\end{document}

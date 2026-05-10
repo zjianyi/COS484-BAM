@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="350" viewBox="0 0 560 350">
+<rect width="100%" height="100%" fill="white"/>
+<style>text{font-family:Arial,Helvetica,sans-serif;fill:#111}.tick{font-size:12px}.label{font-size:15px}.note{font-size:12px;fill:#444}</style>
+<line x1="70" y1="294.00" x2="538" y2="294.00" stroke="#e6e6e6" stroke-width="1"/>
+<text class="tick" x="62" y="298.00" text-anchor="end">1e-04</text>
+<line x1="70" y1="240.00" x2="538" y2="240.00" stroke="#e6e6e6" stroke-width="1"/>
+<text class="tick" x="62" y="244.00" text-anchor="end">1e-03</text>
+<line x1="70" y1="186.00" x2="538" y2="186.00" stroke="#e6e6e6" stroke-width="1"/>
+<text class="tick" x="62" y="190.00" text-anchor="end">0.01</text>
+<line x1="70" y1="132.00" x2="538" y2="132.00" stroke="#e6e6e6" stroke-width="1"/>
+<text class="tick" x="62" y="136.00" text-anchor="end">0.1</text>
+<line x1="70" y1="78.00" x2="538" y2="78.00" stroke="#e6e6e6" stroke-width="1"/>
+<text class="tick" x="62" y="82.00" text-anchor="end">1</text>
+<line x1="70" y1="24.00" x2="538" y2="24.00" stroke="#e6e6e6" stroke-width="1"/>
+<text class="tick" x="62" y="28.00" text-anchor="end">10</text>
+<line x1="70.00" y1="294" x2="70.00" y2="299" stroke="#111"/>
+<text class="tick" x="70.00" y="316" text-anchor="middle">0</text>
+<line x1="193.16" y1="294" x2="193.16" y2="299" stroke="#111"/>
+<text class="tick" x="193.16" y="316" text-anchor="middle">5</text>
+<line x1="316.32" y1="294" x2="316.32" y2="299" stroke="#111"/>
+<text class="tick" x="316.32" y="316" text-anchor="middle">10</text>
+<line x1="439.47" y1="294" x2="439.47" y2="299" stroke="#111"/>
+<text class="tick" x="439.47" y="316" text-anchor="middle">15</text>
+<line x1="538.00" y1="294" x2="538.00" y2="299" stroke="#111"/>
+<text class="tick" x="538.00" y="316" text-anchor="middle">19</text>
+<line x1="70" y1="294" x2="538" y2="294" stroke="#111" stroke-width="1.2"/>
+<line x1="70" y1="24" x2="70" y2="294" stroke="#111" stroke-width="1.2"/>
+<polyline points="70.00,38.52 94.63,72.44 119.26,77.66 143.89,82.50 168.53,91.60 193.16,96.56 217.79,106.13 242.42,113.59 267.05,142.80 291.68,132.28 316.32,181.92 340.95,237.76 365.58,277.74 390.21,294.00 414.84,294.00 439.47,294.00 464.11,294.00 488.74,294.00 513.37,294.00 538.00,294.00" fill="none" stroke="#005AB5" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="70.00" cy="38.52" r="3" fill="#005AB5"/>
+<circle cx="94.63" cy="72.44" r="3" fill="#005AB5"/>
+<circle cx="119.26" cy="77.66" r="3" fill="#005AB5"/>
+<circle cx="193.16" cy="96.56" r="3" fill="#005AB5"/>
+<circle cx="316.32" cy="181.92" r="3" fill="#005AB5"/>
+<circle cx="439.47" cy="294.00" r="3" fill="#005AB5"/>
+<circle cx="538.00" cy="294.00" r="3" fill="#005AB5"/>
+<text class="label" x="304.00" y="334" text-anchor="middle">Epoch</text>
+<text class="label" x="18" y="159.00" text-anchor="middle" transform="rotate(-90 18 159.00)">Training cross-entropy loss</text>
+<text class="note" x="70" y="18">Loss-selected StateCache, k=4, L6</text>
+</svg>
