@@ -12,11 +12,15 @@ from __future__ import annotations
 import argparse
 import json
 import time
+import sys
 from pathlib import Path
 from typing import Any
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 
 from bam.train_babilong_ablation import (
     DEFAULT_MODEL_NAME,
